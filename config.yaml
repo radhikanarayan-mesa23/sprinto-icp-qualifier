@@ -1,0 +1,121 @@
+user_agent: "SprintoICPQualifier/0.1 (research bot; no email is sent; contact: growth team)"
+request_delay_seconds: 2.0
+request_timeout_seconds: 15
+transient_retries: 3
+scheme: "https"
+cache_days: 7
+db_path: "data/qualifier.db"
+output_format: "report"   # csv | json | report
+
+# Cleaning
+clean:
+  min_block_words: 8
+  max_tokens: 2000
+  footer_max_tokens: 150        # footer is kept as a separate signals block (cert strings live there)
+  thin_page_words: 200          # below this, retry once with Playwright
+  tokens_per_word: 1.3          # approximation; no tokenizer download needed
+
+# Model-call budget. Per company: 3 calls + 1 per loop re-extract (ceiling 7).
+calls:
+  per_company_base: 3
+  per_company_ceiling: 7
+  headroom: 5
+  # daily_call_budget is COMPUTED from the domain list: ceiling * n_domains + headroom,
+  # then capped at gemini_free_tier_daily_limit. The limit is looked up at M2 build time.
+  # Google does not publish per-model free-tier RPD on its docs page; third-party figures conflict
+  # (20 to 1500). Read your real number from the AI Studio console and set it here. Live runs refuse
+  # to start while this is null.
+  gemini_free_tier_daily_limit: null
+
+model:
+  provider: gemini
+  name: "gemini-3.8-flash"      # stable Flash per Google's model page, checked 2026-11-17
+  endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+  temperature: 0
+  timeout_seconds: 60
+  invalid_json_retries: 1       # retry once, then log the reason and queue for human
+  # USD per 1M tokens, from Google's pricing page. Left null on purpose: not hardcoded from memory. While null,
+  # estimated cost is stored as null and the report says "not configured" (the free tier costs nothing anyway).
+  pricing_usd_per_mtok: {input: null, output: null}
+
+hunter:
+  warn_at: 20
+  hard_stop_at: 25
+  endpoint: "https://api.hunter.io/v2/domain-search"
+  limit: 10                     # Free plan: limit + offset must not exceed 10
+  timeout_seconds: 20
+  min_confidence: 60            # below this a person is not "suitable"
+  small_company_max_emails: 10  # Hunter's total result count at or below this => treat as a small company
+  seniority_bonus: {executive: 10, senior: 5, junior: -20}
+  # Title tiers: highest matching score wins. small_boost applies only at small companies (founder / CTO preferred).
+  title_tiers:
+    - {name: security_compliance, score: 100, small_boost: 0,
+       patterns: ["ciso", "chief information security", "security", "compliance", "grc", "privacy", "risk"]}
+    - {name: cto, score: 80, small_boost: 30, patterns: ["cto", "chief technology"]}
+    - {name: founder, score: 75, small_boost: 30, patterns: ["founder", "co-founder", "cofounder"]}
+    - {name: ceo, score: 55, small_boost: 15, patterns: ["ceo", "chief executive"]}
+    - {name: engineering_leader, score: 50, small_boost: 0,
+       patterns: ["vp engineering", "vp of engineering", "head of engineering", "director of engineering"]}
+
+fetch_cap_beyond_homepage: 4    # ceiling, not a target
+
+# ICP. The homepage is request one and may resolve rows 1 and 2 before any extra fetch.
+icp:
+  already_certified:
+    hard: false
+    short_circuit: {when: "certified", action: "disqualify"}
+    pages: ["/", "/security", "/trust"]
+    fetch_limit: 1
+    if_unanswered: "treat_as_not_certified_flag"
+    cert_patterns: ["SOC ?2", "ISO ?/?IEC ?27001", "ISO ?27001", "HIPAA", "PCI[- ]?DSS", "GDPR compliant"]
+  b2b_saas:
+    hard: true
+    short_circuit: {when: "not_b2b_saas", action: "disqualify"}
+    pages: ["/", "/product", "/about"]
+    fetch_limit: 1
+    if_unanswered: "manual_review"
+  right_stage:
+    hard: false
+    pages: ["/careers", "/pricing", "/customers"]
+    fetch_limit: 2
+    sufficient_any: {funding_stage_named: true, open_roles_min: 5, enterprise_tier: true}
+    if_unanswered: "qualify_lower_rank_flag"
+  compliance_pressure:
+    hard: false
+    soft_tiebreak_only: true    # never qualifies a company on its own
+    pages: ["/customers", "/security", "/careers"]
+    fetch_limit: shared_with_right_stage
+    if_unanswered: "proceed_flag_low_signal"
+
+# Draft policy: only no_go and manual_review are withheld. A flagged go still gets contact + draft.
+draft_withheld_for: ["no_go", "manual_review"]
+
+# Qualify (M4). Short-circuits are applied in code before any model call. The model only judges what was found.
+qualify:
+  # A go carrying any of these soft-signal flags is labelled go_flagged. It STILL gets a contact and a draft.
+  go_flagged_flags: ["stage_unresolved_lower_rank", "compliance_low_signal"]
+  # rank 1 is best. Stage dominates; compliance only breaks ties inside a stage tier. Never a reason to qualify.
+  rank_table:
+    stage_and_compliance: 1
+    stage_only: 2
+    no_stage_compliance: 3
+    no_stage_no_compliance: 4
+
+# Draft (M6). One call returns 2 pain points + an email. Code builds the greeting and sign-off, then runs the
+# provenance gate. A failed gate means NO draft: flag draft_failed_provenance and queue for a human.
+draft:
+  max_words: 120                # the whole email must be strictly under this
+  sender_name: "[Your name]"
+  output_dir: "outputs"
+  # Hooks must be company-specific. product_description and company_name are too generic to hook on.
+  hook_fields: ["compliance_pressure_signal", "funding_stage", "enterprise_signal", "open_roles_count"]
+  allowed_terms: ["Sprinto", "SOC", "ISO", "GDPR", "HIPAA", "Type", "II", "Hi", "Best"]
+  allowed_numbers: ["2", "15", "27001"]   # SOC 2, a 15-minute call, ISO 27001
+
+# Run-level targets from the pre-build decisions (logged, never enforced)
+targets:
+  seconds_per_company: 120      # success: under 2 minutes
+  baseline_minutes_per_company: [15, 20]
+  max_rewritten_share: 0.20     # measured by the reviewer, not by this tool
+  kill_rewritten_share: 0.50
+  kill_accuracy: 0.60

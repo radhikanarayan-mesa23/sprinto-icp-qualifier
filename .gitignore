@@ -1,0 +1,13 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+data/*.db
+output/
+.pytest_cache/
+outputs/
+.taste-skill/
+node_modules/
+.next/
+.DS_Store
+.claude/settings.local.json
