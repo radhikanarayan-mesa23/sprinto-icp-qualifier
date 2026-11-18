@@ -7,7 +7,7 @@ import { liveDb } from "@/lib/run/db";
 export const metadata = { title: "Run a domain" };
 export const dynamic = "force-dynamic";
 
-// Open demo: no passcode and no sign-in. The Gemini key and database URL stay on the server; the browser only ever
+// Open demo: no passcode and no sign-in. The model key and database URL stay on the server; the browser only ever
 // receives these booleans and counters.
 export default async function Page() {
   const env = process.env;
@@ -18,7 +18,7 @@ export default async function Page() {
     <ScraperHero
       config={{
         disabled: env.LIVE_RUNS_DISABLED === "1",
-        modelReady: !!env.GEMINI_API_KEY && budget > 0,
+        modelReady: !!env[config.model.key_env] && budget > 0,
         perVisitor: RUN_LIMITS.perVisitorPerHour, global: RUN_LIMITS.globalPerHour,
         budget: budget > 0 ? budget : null, used, model: config.model.name, delay: config.request_delay_seconds,
       }}

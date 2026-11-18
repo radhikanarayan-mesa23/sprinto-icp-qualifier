@@ -7,6 +7,7 @@ import sqlite3
 import pytest
 
 import qualifier
+from icp.config import load_config
 from icp.fetch import open_db
 from icp.llm import LLM, CallBudget
 from icp.pipeline import run_domains
@@ -137,8 +138,9 @@ def test_elapsed_time_logged_and_checked_against_target(cfg, env):
     assert s["target_seconds"] == 120 and s["within_target"] is True and s["avg_seconds_per_company"] < 120
 
 
-def test_cost_is_null_until_pricing_configured(cfg, env):
-    """[medium] No invented prices: est_cost_usd is null until pricing is set, then it is computed."""
+def test_cost_uses_configured_prices_and_is_null_without_them(cfg, env):
+    """[medium] No invented prices: est_cost_usd is null when pricing is unset and computed from config when it is set."""
+    cfg["model"]["pricing_usd_per_mtok"] = {"input": None, "output": None}
     res, f, _ = run(cfg, env, ["acmeledger.test"])
     assert res["records"][0]["est_cost_usd"] is None and res["summary"]["est_cost_usd"] is None
     cfg["model"]["pricing_usd_per_mtok"] = {"input": 1.0, "output": 2.0}
@@ -190,11 +192,14 @@ def test_cli_requires_keys_and_limit_and_never_prints_secrets(tmp_path, monkeypa
     monkeypatch.setattr("qualifier.env", lambda k: None)
     assert qualifier.main([str(f)]) == 2
     err = capsys.readouterr().err
-    assert "GEMINI_API_KEY" in err and "HUNTER_API_KEY" in err
+    assert "OPENROUTER_API_KEY" in err and "HUNTER_API_KEY" in err
     monkeypatch.setattr("qualifier.env", lambda k: "SECRETVALUE")
+    capped = load_config()
+    capped["calls"]["daily_cap"] = None
+    monkeypatch.setattr("qualifier.load_config", lambda p=None: capped)
     assert qualifier.main([str(f)]) == 2
     err = capsys.readouterr().err
-    assert "gemini_free_tier_daily_limit" in err and "SECRETVALUE" not in err
+    assert "daily_cap" in err and "SECRETVALUE" not in err
 
 
 def test_cli_dry_run_makes_no_requests(tmp_path, capsys):

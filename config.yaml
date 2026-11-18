@@ -25,18 +25,26 @@ calls:
   # Google does not publish per-model free-tier RPD on its docs page; third-party figures conflict
   # (20 to 1500). Read your real number from the AI Studio console and set it here. Live runs refuse
   # to start while this is null.
-  gemini_free_tier_daily_limit: null
+  gemini_free_tier_daily_limit: null   # only used when model.provider is gemini
+  # OpenRouter has no free-tier limit, so spend is capped by this many model calls per UTC day (shared with the viewer).
+  daily_cap: 100
 
 model:
-  provider: gemini
-  name: "gemini-3.8-flash"      # stable Flash per Google's model page, checked 2026-11-17
-  endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+  # Provider switch: "openrouter" (Gemini Flash through OpenRouter, key in OPENROUTER_API_KEY) or "gemini" (Google's own
+  # REST API, key in GEMINI_API_KEY; then use name "gemini-3.8-flash" and the Google endpoint below).
+  provider: openrouter
+  key_env: OPENROUTER_API_KEY
+  name: "google/gemini-3.8-flash"        # current Gemini Flash on OpenRouter, looked up 2026-11-18
+  endpoint: "https://openrouter.ai/api/v1/chat/completions"
+  # gemini endpoint (provider: gemini): https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
   temperature: 0
+  # OpenRouter only. Gemini 3.8 Flash always reasons; "low" cut a real extraction from 10-15 s to 3-6 s and about 2.5x the cost,
+  # with identical grounded values on the pages tested (checked 2026-11-18). Raise it if extraction quality ever drops.
+  reasoning_effort: low
   timeout_seconds: 60
   invalid_json_retries: 1       # retry once, then log the reason and queue for human
-  # USD per 1M tokens, from Google's pricing page. Left null on purpose: not hardcoded from memory. While null,
-  # estimated cost is stored as null and the report says "not configured" (the free tier costs nothing anyway).
-  pricing_usd_per_mtok: {input: null, output: null}
+  # USD per 1M tokens, from OpenRouter's model listing for google/gemini-3.8-flash (0.825 in, 4.125 out), 2026-11-18.
+  pricing_usd_per_mtok: {input: 0.825, output: 4.125}
 
 hunter:
   warn_at: 20

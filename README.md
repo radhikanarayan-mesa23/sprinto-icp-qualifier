@@ -17,6 +17,9 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 Keys live only in `.env` (see `.env.example`). Nothing is read from code, logs or the browser.
 
+Model: Gemini Flash. `config.yaml` selects the provider: `openrouter` (default, `google/gemini-3.8-flash`, key in
+`OPENROUTER_API_KEY`, reasoning effort low, prices from OpenRouter's listing) or `gemini` (Google's own API, `GEMINI_API_KEY`).
+
 ## Storage
 SQLite locally, Postgres (Neon) when `DATABASE_URL` is set. `python scripts/neon_migrate.py --schema-only` creates and
 verifies the schema; `db/schema.postgres.sql` is the same DDL.
@@ -33,7 +36,7 @@ npm test                                   # 70 tests: SSRF guard, Python parity
 ### Live "Run a domain" page (`/run`)
 Styled after the Axiom hero (cream graph paper, serif headline, stage card); each scraper stage shows its own copy,
 streamed live as the server finishes it. Palette: light blue, cream, light green, dark blue.
-One homepage, plain fetch only. An open demo: no passcode and no sign-in, and the Gemini key stays on the server. It checks robots.txt, waits, fetches once, cleans, extracts (one
+One homepage, plain fetch only. An open demo: no passcode and no sign-in, and the model key stays on the server. It checks robots.txt, waits, fetches once, cleans, extracts (one
 model call) and runs the code-side evidence check, then saves a labelled **partial** record. It refuses private and
 internal addresses (checked again at connect time and on every redirect), stops at CAPTCHAs, challenges and logins, and
 shares the CLI's daily model-call counter (UTC day), its cache by domain and its Hunter cap. Limits: 3 runs per visitor

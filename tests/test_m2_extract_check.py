@@ -189,13 +189,20 @@ def test_per_company_ceiling(llm_for, make_fetcher):
         extract(llm, "sunrisebakery.test", pages)
 
 
-def test_budget_formula_and_free_tier_cap(cfg):
-    """[high] budget = 7 x domains + headroom, capped at the free-tier limit, and live runs refuse an unknown limit."""
+def test_budget_formula_and_cap(cfg):
+    """[high] budget = 7 x domains + headroom, capped at the provider's daily cap, and live runs refuse an unknown cap."""
+    assert cfg["model"]["provider"] == "openrouter"
     assert compute_daily_call_budget(cfg, 10) == 75
-    cfg["calls"]["gemini_free_tier_daily_limit"] = 60
+    cfg["calls"]["daily_cap"] = 60
     assert compute_daily_call_budget(cfg, 10) == 60
+    cfg["calls"]["daily_cap"] = None
+    with pytest.raises(ValueError, match="daily_cap"):
+        compute_daily_call_budget(cfg, 10, require_limit=True)
+    cfg["model"]["provider"] = "gemini"  # direct Google API: its own free-tier limit applies instead
+    cfg["calls"]["gemini_free_tier_daily_limit"] = 40
+    assert compute_daily_call_budget(cfg, 10) == 40
     cfg["calls"]["gemini_free_tier_daily_limit"] = None
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="gemini_free_tier_daily_limit"):
         compute_daily_call_budget(cfg, 10, require_limit=True)
 
 

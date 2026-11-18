@@ -68,8 +68,21 @@ def verify_fields(raw, pages):
     return fields, flags
 
 
+def normalize_extraction(obj):
+    """An explicit null for a field means "unknown", which is exactly what the spec says unknown is. Fill it with the explicit
+    empty triple so the schema stays strict. A MISSING key is not unknown, it is a malformed reply (an empty {} would be a silent
+    empty result), so it still fails validation. Nothing is inferred and extra keys still fail too."""
+    if not isinstance(obj, dict):
+        return obj
+    out = dict(obj)
+    for name in FIELDS:
+        if name in out and out[name] is None:
+            out[name] = {"value": None, "source_url": None, "evidence_quote": None}
+    return out
+
+
 def extract(llm, domain, pages):
     """pages: [(url, Cleaned)]. Raises InvalidModelOutput / BudgetExhausted for the caller to queue."""
-    raw, usage = llm.generate_json(domain, SYSTEM, build_prompt(pages), EXTRACTION_SCHEMA)
+    raw, usage = llm.generate_json(domain, SYSTEM, build_prompt(pages), EXTRACTION_SCHEMA, normalize=normalize_extraction)
     fields, flags = verify_fields(raw, pages)
     return {"fields": fields, "flags": flags, "usage": usage}

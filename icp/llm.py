@@ -1,6 +1,7 @@
 """Gemini REST client with budget enforcement, schema validation and a single retry.
 The API key is read from the environment, sent in a header (never in the URL) and never logged."""
 import json
+import time
 from datetime import datetime, timezone
 
 import jsonschema
@@ -62,12 +63,50 @@ def http_transport(cfg):
     return send
 
 
+def openrouter_transport(cfg, sleep=time.sleep):
+    """OpenRouter (OpenAI-compatible chat completions). Takes and returns the same Gemini-shaped dicts as the Gemini
+    transport, so LLM, the budget, the schema validation and every test stay provider-agnostic. The key goes in a
+    header, never the URL. 429 and 5xx retry with backoff (transient); other HTTP errors are raised."""
+    m = cfg["model"]
+
+    def send(body):
+        key = env(m["key_env"])
+        if not key:
+            raise RuntimeError(f"{m['key_env']} is not set in .env")
+        payload = {
+            "model": m["name"], "temperature": m["temperature"], "response_format": {"type": "json_object"},
+            "messages": [{"role": "system", "content": body["systemInstruction"]["parts"][0]["text"]},
+                         {"role": "user", "content": body["contents"][0]["parts"][0]["text"]}],
+        }
+        if m.get("reasoning_effort"):
+            payload["reasoning"] = {"effort": m["reasoning_effort"]}
+        headers = {"Authorization": f"Bearer {key}", "X-Title": "Sprinto ICP Qualifier", "User-Agent": cfg["user_agent"]}
+        for attempt in range(cfg["transient_retries"]):
+            r = requests.post(m["endpoint"], json=payload, headers=headers, timeout=m["timeout_seconds"])
+            if r.status_code == 429 or r.status_code >= 500:
+                sleep(2 ** attempt)
+                continue
+            r.raise_for_status()
+            d = r.json()
+            u = d.get("usage") or {}
+            return {"candidates": [{"content": {"parts": [{"text": d["choices"][0]["message"]["content"]}]}}],
+                    "usageMetadata": {"promptTokenCount": u.get("prompt_tokens", 0), "candidatesTokenCount": u.get("completion_tokens", 0)}}
+        r.raise_for_status()
+        raise RuntimeError("model provider kept failing")
+
+    return send
+
+
+def default_transport(cfg):
+    return openrouter_transport(cfg) if cfg["model"]["provider"] == "openrouter" else http_transport(cfg)
+
+
 class LLM:
     def __init__(self, cfg, budget, transport=None):
         self.cfg, self.budget = cfg, budget
-        self.transport = transport or http_transport(cfg)
+        self.transport = transport or default_transport(cfg)
 
-    def generate_json(self, domain, system, user, schema):
+    def generate_json(self, domain, system, user, schema, normalize=None):
         """Returns (object, usage). Counts every attempt against the budget. Never returns an empty result silently."""
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
@@ -87,6 +126,8 @@ class LLM:
             try:
                 text = resp["candidates"][0]["content"]["parts"][0]["text"]
                 obj = json.loads(text)
+                if normalize:
+                    obj = normalize(obj)
                 jsonschema.validate(obj, schema)
                 return obj, usage
             except (KeyError, IndexError, TypeError, json.JSONDecodeError, jsonschema.ValidationError) as e:

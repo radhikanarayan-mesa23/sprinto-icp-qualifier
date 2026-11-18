@@ -50,7 +50,7 @@ def main(argv=None, deps=None):
         return 2
 
     if deps is None:  # live run: fail loudly before spending anything
-        missing = [k for k in ("GEMINI_API_KEY", "HUNTER_API_KEY") if not env(k)]
+        missing = [k for k in (cfg["model"]["key_env"], "HUNTER_API_KEY") if not env(k)]
         if missing and not a.dry_run:
             print(f"error: missing in .env: {', '.join(missing)}", file=sys.stderr)
             return 2
@@ -62,7 +62,7 @@ def main(argv=None, deps=None):
     else:
         budget = compute_daily_call_budget(cfg, len(domains))
     print(f"{len(domains)} domains; daily_call_budget = {budget} (7 x {len(domains)} + {cfg['calls']['headroom']}, "
-          f"capped at the free-tier limit)")
+          f"capped at the daily model-call cap)")
     if a.dry_run:
         print("dry run: " + ", ".join(domains))
         return 0

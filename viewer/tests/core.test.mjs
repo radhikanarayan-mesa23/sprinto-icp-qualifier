@@ -33,15 +33,15 @@ function make({ env = {}, limits, domains } = {}) {
   let modelCalls = 0;
   const gemini = async (url, init) => {
     modelCalls += 1;
-    const prompt = JSON.parse(init.body).contents[0].parts[0].text;
+    const prompt = JSON.parse(init.body).messages[1].content;
     prompts.push(prompt);
     const pageUrl = /url=(\S+?)>>>/.exec(prompt)[1];
     const folder = pageUrl.split("/")[3];
     const obj = (CANNED[folder] ?? (() => nul()))(pageUrl);
-    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(obj) }] } }], usageMetadata: { promptTokenCount: 120, candidatesTokenCount: 30 } }));
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(obj) } }], usage: { prompt_tokens: 120, completion_tokens: 30 } }));
   };
   const sleeps = [];
-  const base = { db: null, env: { LIVE_DAILY_CALL_BUDGET: "10", GEMINI_API_KEY: "k", ...env }, cfg: config, limits,
+  const base = { db: null, env: { LIVE_DAILY_CALL_BUDGET: "10", [config.model.key_env]: "k", ...env }, cfg: config, limits,
     fetchFn: (u, o) => safeFetch(u, { ...o, unsafeAllowPrivateHosts: true }), geminiFetch: gemini, now: () => NOW,
     sleep: async (ms) => { sleeps.push(ms); }, urlFor: (d) => `${fx.base}/${FOLDER[d] ?? domains?.[d] ?? "nope"}/` };
   return { deps: base, prompts, sleeps, calls: () => modelCalls };
@@ -85,7 +85,9 @@ test("happy path: one homepage, one model call, evidence rows, a partial record 
   assert.equal(row.run_source, "live"); assert.equal(row.decision, "partial"); assert.equal(row.fetches_beyond_homepage, 0);
   assert.equal(row.pages_fetched.length, 1); assert.equal(row.pages_fetched[0].path, "/");
   assert.equal(row.extracted_fields.company_name.value, "Acme Ledger"); assert.ok(row.flags.includes("live_partial_run"));
-  assert.equal(row.draft.status, "blocked"); assert.equal(row.contact, null); assert.equal(row.est_cost_usd, null);
+  assert.equal(row.draft.status, "blocked"); assert.equal(row.contact, null);
+  // cost comes from the configured prices: 120 in / 30 out tokens at $0.825 / $4.125 per million
+  assert.equal(row.est_cost_usd, Math.round((120 / 1e6 * 0.825 + 30 / 1e6 * 4.125) * 1e6) / 1e6);
   assert.equal((await t.db.query("SELECT n FROM call_log WHERE day = $1", [DAY]))[0].n, 1);
 });
 
@@ -102,10 +104,10 @@ test("stages stream live: onStep fires once per stage, in order, and equals the 
 });
 
 test("the response never contains the model key or the database settings", async () => {
-  const t = await setup({ env: { GEMINI_API_KEY: "SUPERSECRETKEY", DATABASE_URL: "postgres://u:p@h/db" } });
+  const t = await setup({ env: { [config.model.key_env]: "SUPERSECRETKEY", DATABASE_URL: "postgres://u:p@h/db" } });
   const r = await go(t, "acmeledger.com");
   const text = JSON.stringify(r.body);
-  for (const s of ["SUPERSECRETKEY", "DATABASE_URL", "postgres://", "x-goog-api-key"]) assert.ok(!text.includes(s), s);
+  for (const s of ["SUPERSECRETKEY", "DATABASE_URL", "postgres://", "x-goog-api-key", "authorization", "Bearer"]) assert.ok(!text.includes(s), s);
   assert.ok(!t.prompts.join("").includes("SUPERSECRETKEY"));
 });
 
@@ -165,7 +167,7 @@ test("budget not configured or no model key: honest scraper-only runs, no model 
   const ra = (await go(a, "acmeledger.com")).body;
   assert.ok(ra.flags.includes("extract_skipped:budget_not_configured")); assert.equal(a.calls(), 0);
   assert.doesNotMatch(ra.defence, /\.\)/, "no period before the closing bracket in the defence sentence");
-  const b = await setup({ env: { GEMINI_API_KEY: "" } });
+  const b = await setup({ env: { [config.model.key_env]: "" } });
   const rb = (await go(b, "acmeledger.com")).body;
   assert.ok(rb.flags.includes("extract_skipped:no_model_key")); assert.match(rb.extract_note, /scraper only/); assert.equal(b.calls(), 0);
   assert.equal(rb.cleaned.words > 100, true, "the fetch and clean results are still real");

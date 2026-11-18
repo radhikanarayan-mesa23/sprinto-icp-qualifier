@@ -9,6 +9,15 @@ const ajv = new Ajv({ strict: false });
 const validate = ajv.compile(schema);
 const DELIM = /<<<|>>>/g;
 
+// An explicit null for a field means "unknown", exactly as the spec defines it. Fill the explicit empty triple so the schema stays
+// strict. A MISSING key is a malformed reply (an empty {} would be a silent empty result), so it still fails validation.
+export function normalizeExtraction(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
+  const out = { ...obj };
+  for (const name of FIELDS) if (Object.hasOwn(out, name) && out[name] === null) out[name] = { value: null, source_url: null, evidence_quote: null };
+  return out;
+}
+
 const norm = (s) => String(s ?? "").toLowerCase().replace(/[^\p{L}\p{N}_\s]/gu, " ").split(/\s+/).filter(Boolean).join(" ");
 
 export function buildPrompt(pages) {
@@ -49,31 +58,44 @@ export class ExtractSkipped extends Error {
  * it throws ExtractSkipped with a reason the caller shows.
  */
 export async function extractFields({ pages, cfg, apiKey, spend, fetchImpl = fetch, timeoutMs = 12000 }) {
-  if (!apiKey) throw new ExtractSkipped("no_model_key", "GEMINI_API_KEY is not set on the server");
-  const body = {
-    systemInstruction: { parts: [{ text: prompts.extractSystem }] },
-    contents: [{ role: "user", parts: [{ text: buildPrompt(pages) }] }],
-    generationConfig: { responseMimeType: "application/json", temperature: cfg.model.temperature },
-  };
-  const url = cfg.model.endpoint.replace("{model}", cfg.model.name);
+  const m = cfg.model;
+  if (!apiKey) throw new ExtractSkipped("no_model_key", `${m.key_env} is not set on the server`);
+  const user = buildPrompt(pages);
+  const system = prompts.extractSystem;
+  // Two providers, one result shape. The key always goes in a header, never the URL.
+  const request = m.provider === "openrouter"
+    ? { url: m.endpoint,
+        headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}`, "x-title": "Sprinto ICP Qualifier" },
+        body: { model: m.name, temperature: m.temperature, response_format: { type: "json_object" },
+          ...(m.reasoning_effort ? { reasoning: { effort: m.reasoning_effort } } : {}),
+          messages: [{ role: "system", content: system }, { role: "user", content: user }] } }
+    : { url: m.endpoint.replace("{model}", m.name),
+        headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+        body: { systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: user }] }],
+          generationConfig: { responseMimeType: "application/json", temperature: m.temperature } } };
+  const read = (json) => m.provider === "openrouter"
+    ? { text: json.choices[0].message.content, prompt: json.usage?.prompt_tokens ?? 0, output: json.usage?.completion_tokens ?? 0 }
+    : { text: json.candidates[0].content.parts[0].text, prompt: json.usageMetadata?.promptTokenCount ?? 0, output: json.usageMetadata?.candidatesTokenCount ?? 0 };
+
   const usage = { calls: 0, prompt_tokens: 0, output_tokens: 0 };
   let reason = "invalid_model_output";
-  for (let attempt = 0; attempt <= cfg.model.invalid_json_retries; attempt += 1) {
+  for (let attempt = 0; attempt <= m.invalid_json_retries; attempt += 1) {
     if (!(await spend())) throw new ExtractSkipped("daily_budget", "The shared daily model-call budget is spent");
     usage.calls += 1;
     let res;
     try {
-      res = await fetchImpl(url, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) });
+      res = await fetchImpl(request.url, { method: "POST", headers: request.headers, body: JSON.stringify(request.body), signal: AbortSignal.timeout(timeoutMs) });
     } catch (e) {
       throw new ExtractSkipped("model_unreachable", e?.name === "TimeoutError" ? "The model timed out" : "The model could not be reached");
     }
     if (!res.ok) throw new ExtractSkipped("model_error", `The model returned HTTP ${res.status}`);
-    const json = await res.json();
-    usage.prompt_tokens += json.usageMetadata?.promptTokenCount ?? 0;
-    usage.output_tokens += json.usageMetadata?.candidatesTokenCount ?? 0;
+    let got;
     try {
-      const obj = JSON.parse(json.candidates[0].content.parts[0].text);
+      const json = await res.json();
+      got = read(json);
+      usage.prompt_tokens += got.prompt;
+      usage.output_tokens += got.output;
+      const obj = normalizeExtraction(JSON.parse(got.text));
       if (validate(obj)) return { raw: obj, usage, ...verifyFields(obj, pages) };
       reason = `schema: ${ajv.errorsText(validate.errors).slice(0, 120)}`;
     } catch (e) {

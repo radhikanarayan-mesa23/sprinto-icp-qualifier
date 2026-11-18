@@ -138,8 +138,9 @@ export async function runDomain({ domain: rawDomain, ip }, deps) {
   } else {
     try {
       if (!(budget > 0)) throw new ExtractSkipped("budget_not_configured", "LIVE_DAILY_CALL_BUDGET is not set, so no model call can be made safely");
-      const out = await extractFields({ pages: [pageForModel], cfg, apiKey: env.GEMINI_API_KEY, geminiFetch, fetchImpl: geminiFetch,
-        spend: () => spendCall(db, day, budget) });
+      const out = await extractFields({ pages: [pageForModel], cfg, apiKey: env[cfg.model.key_env], geminiFetch, fetchImpl: geminiFetch,
+        spend: () => spendCall(db, day, budget),
+        timeoutMs: Math.max(5000, Math.min(14000, 27000 - (Date.now() - t0))) }); // always finishes inside the 30 s function limit
       fields = out.fields;
       usage = out.usage;
       flags.push(...out.flags);
@@ -194,11 +195,17 @@ export async function runDomain({ domain: rawDomain, ip }, deps) {
     decision, defence, flags: [...new Set(flags)], pages_fetched: [pageRow], extracted_fields: fields, icp_rows: rows, reasons,
     short_circuit: shortCircuit, stop_reason: "live_homepage_only", queue: decision === "manual_review" ? "manual_review" : null,
     model_calls: usage.calls, prompt_tokens: usage.prompt_tokens, output_tokens: usage.output_tokens, injection_flags: cleaned.injection_flags,
-    fetch_method: "requests" });
+    fetch_method: "requests", pricing: cfg.model.pricing_usd_per_mtok });
   await saveRecord(db, rec);
   step("save", "Save", "ok", "Saved as a partial record. Open it to see the evidence trail.");
   return { status: 200, body: await view(db, rec, { cfg, fetchInfo, steps, visitor, hour, day, env, limits, saved: true, elapsed: (Date.now() - t0) / 1000,
     cleaned: { words: cleaned.words, tokens_before: cleaned.tokens_before, tokens_after: cleaned.tokens_after, preview: cleaned.text.slice(0, 1200), footer: cleaned.footer_signals }, extractNote }) };
+}
+
+function costOf(o) {
+  const p = o.pricing;
+  if (!o.model_calls || !p || p.input == null || p.output == null) return null;
+  return Math.round(((o.prompt_tokens ?? 0) / 1e6 * p.input + (o.output_tokens ?? 0) / 1e6 * p.output) * 1e6) / 1e6;
 }
 
 function baseRecord(domain, now, t0, o) {
@@ -208,7 +215,7 @@ function baseRecord(domain, now, t0, o) {
     decision: o.decision, reasons: o.reasons ?? [], defence: o.defence, rank: null, rank_basis: null, flags: o.flags ?? [],
     contact: null, contact_meta: { considered: 0, rejected: [], searches_used: null, from_cache: false }, pain_points: [],
     draft: emptyDraft(), model_calls: o.model_calls ?? 0, prompt_tokens: o.prompt_tokens ?? 0, output_tokens: o.output_tokens ?? 0,
-    est_cost_usd: null, failure_reason: o.failure_reason ?? null, queue: o.queue ?? null, stop_reason: o.stop_reason ?? null,
+    est_cost_usd: costOf(o), failure_reason: o.failure_reason ?? null, queue: o.queue ?? null, stop_reason: o.stop_reason ?? null,
     short_circuit: o.short_circuit ?? null, fetches_beyond_homepage: 0, loop_trace: [], injection_flags: o.injection_flags ?? [],
     elapsed_seconds: Math.round((Date.now() - t0)) / 1000, run_source: "live", created_at: now().toISOString(),
   };
@@ -224,7 +231,7 @@ async function view(db, rec, o) {
     failure: o.failure ?? rec.failure_reason ?? null, explanation: o.explanation ?? null, flags: rec.flags ?? [], steps: o.steps,
     rows: (rec.reasons ?? []).map((r) => ({ row: r.row, status: r.status, outcome: r.outcome, field: r.field, value: r.value, source_url: r.source_url, quote: r.evidence_quote })),
     cleaned: o.cleaned ?? null, extract_note: o.extractNote ?? null,
-    model: { calls: rec.model_calls, prompt_tokens: rec.prompt_tokens, output_tokens: rec.output_tokens, key_configured: !!o.env.GEMINI_API_KEY },
+    model: { calls: rec.model_calls, prompt_tokens: rec.prompt_tokens, output_tokens: rec.output_tokens, key_configured: !!o.env[o.cfg.model.key_env] },
     guards: { visitor_runs_used: mine, visitor_runs_limit: o.limits.perVisitorPerHour, budget_used: used, budget_limit: Number.isFinite(budget) ? budget : null,
       hunter_used: await hunterUsedThisMonth(db, o.day.slice(0, 7)), hunter_cap: o.cfg.hunter.hard_stop_at },
     fetch: o.fetchInfo ?? null,

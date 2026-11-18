@@ -2,6 +2,7 @@
 export default {
   "cache_days": 7,
   "calls": {
+    "daily_cap": 100,
     "gemini_free_tier_daily_limit": null,
     "headroom": 5,
     "per_company_base": 3,
@@ -181,14 +182,16 @@ export default {
     }
   },
   "model": {
-    "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
     "invalid_json_retries": 1,
-    "name": "gemini-3.8-flash",
+    "key_env": "OPENROUTER_API_KEY",
+    "name": "google/gemini-3.8-flash",
     "pricing_usd_per_mtok": {
-      "input": null,
-      "output": null
+      "input": 0.825,
+      "output": 4.125
     },
-    "provider": "gemini",
+    "provider": "openrouter",
+    "reasoning_effort": "low",
     "temperature": 0,
     "timeout_seconds": 60
   },

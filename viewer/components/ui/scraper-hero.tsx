@@ -367,7 +367,7 @@ export default function ScraperHero({ config }: { config: ScraperConfig }) {
               <p id='axm-note' className='axm-note axm-rise' style={at(0.26)}>
                 <b>Open demo, no sign-in.</b> Plain fetch only · one homepage · up to 25 s · {config.perVisitor} runs per visitor per hour.
                 {config.disabled ? ' Live runs are switched off by the site owner right now.' : ''}
-                {!config.disabled && !config.modelReady ? ` No model key is set on the server yet, so runs fetch and clean but skip extraction.` : ''}
+                {!config.disabled && !config.modelReady ? ` No model key or daily budget is set on the server yet, so runs fetch and clean but skip extraction.` : ''}
               </p>
 
               <div aria-live='polite' role='status' className='w-full'>

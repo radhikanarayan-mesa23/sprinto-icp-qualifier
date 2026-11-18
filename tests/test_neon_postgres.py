@@ -194,10 +194,10 @@ def test_hunter_counter_and_cap_on_postgres(cfg, pg):
 # ---- CLI + script wiring
 def test_cli_prefers_database_url_and_never_prints_it(tmp_path, monkeypatch, capsys, pg_url, cfg, server):
     """[high] qualifier.py writes to DATABASE_URL (Neon) when set, and the URL never appears in output."""
-    envmap = {"DATABASE_URL": pg_url, "GEMINI_API_KEY": "x", "HUNTER_API_KEY": "y"}
+    envmap = {"DATABASE_URL": pg_url, "OPENROUTER_API_KEY": "x", "HUNTER_API_KEY": "y"}
     monkeypatch.setattr("qualifier.env", lambda k: envmap.get(k))
     cfg2 = dict(cfg)
-    cfg2["calls"] = {**cfg["calls"], "gemini_free_tier_daily_limit": 500}
+    cfg2["calls"] = {**cfg["calls"], "daily_cap": 500}
     monkeypatch.setattr("qualifier.load_config", lambda p=None: cfg2)
     captured = {}
 
