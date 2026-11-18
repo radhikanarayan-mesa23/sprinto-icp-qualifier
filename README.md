@@ -43,3 +43,6 @@ shares the CLI's daily model-call counter (UTC day), its cache by domain and its
 per hour, 20 per hour overall, plus an owner kill switch (`LIVE_RUNS_DISABLED=1`). Server variables are listed in `viewer/.env.example`.
 The JavaScript cleaner and evidence check are ports of the Python ones; `scripts/sync_viewer_config.py` generates
 their settings from `config.yaml` and a golden-output test proves parity on every fixture page.
+
+## Reviewing drafts by email
+`scripts/resend_review.py` emails each draft to the reviewer only (never to the prospect) via Resend. See `docs/resend-review.md`.

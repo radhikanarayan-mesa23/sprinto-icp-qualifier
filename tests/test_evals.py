@@ -279,7 +279,7 @@ def c_secrets(ctx):
     assert not offenders, offenders
     assert ".env" in (ROOT / ".gitignore").read_text().split()
     ex = dict(l.split("=", 1) for l in (ROOT / ".env.example").read_text().split("\n") if "=" in l)
-    assert set(ex) == {"GEMINI_API_KEY", "OPENROUTER_API_KEY", "HUNTER_API_KEY"} and all(v == "" for v in ex.values())
+    assert set(ex) == {"GEMINI_API_KEY", "OPENROUTER_API_KEY", "HUNTER_API_KEY", "RESEND_API_KEY"} and all(v == "" for v in ex.values())
 
 
 CASES = [
