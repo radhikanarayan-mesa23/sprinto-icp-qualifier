@@ -23,11 +23,20 @@ const BOX = [
   { n: "10", t: "Save", s: "source + why", c: 5, l: 7, kind: "code" },
   { n: "11", t: "Review", s: "you approve", c: 5, l: 0, kind: "human" },
 ];
-const FILL = { human: "#141414", code: "#e4e7ec", ai: "#e8f0fb", cache: "#fffbeb", queue: "#ffedea" };
-const INK = { human: "#ffffff", code: "#0a0a0a", ai: "#1d5fbf", cache: "#92400e", queue: "#831c1e" };
+const FILL = { human: "var(--blue-dark)", code: "var(--active)", ai: "var(--data-tint)",
+  cache: "color-mix(in srgb, var(--green) 55%, var(--cream))", queue: "var(--cream)" };
+const INK = { human: "var(--cream)", code: "var(--ink)", ai: "var(--blue-dark)", cache: "var(--ink)", queue: "var(--ink)" };
+// Arrows differ by line style as well as tone, so nothing relies on colour alone.
+const ARROW = {
+  main: { stroke: "var(--ink)", dash: undefined },
+  loop: { stroke: "var(--blue-light)", dash: "5 4" },
+  nogo: { stroke: "var(--blue-dark)", dash: "1.5 4" },
+  out: { stroke: "var(--blue-dark)", dash: "9 4" },
+};
 
-function Arrow({ d, color = "#141414", dash }) {
-  return <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeDasharray={dash} markerEnd={`url(#a-${color.slice(1)})`} />;
+function Arrow({ d, kind = "main" }) {
+  const k = ARROW[kind];
+  return <path d={d} fill="none" stroke={k.stroke} strokeWidth="1.6" strokeDasharray={k.dash} strokeLinecap="round" markerEnd={`url(#a-${kind})`} />;
 }
 
 export default function Page() {
@@ -51,17 +60,17 @@ export default function Page() {
             <title id="map-t">Components map of the ICP Qualifier</title>
             <desc id="map-d">Domains and ICP rules go to a cache check, then fetch, clean and check. Missing evidence loops back for at most four more pages. Checked evidence goes to qualify; no go and review go to a queue; go goes to find contact, then draft, then save, then human review.</desc>
             <defs>
-              {["141414", "92400e", "831c1e", "2e7d32"].map((c) => (
-                <marker key={c} id={`a-${c}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                  <path d="M0 0 L8 4 L0 8 z" fill={`#${c}`} />
+              {Object.entries(ARROW).map(([kind, k]) => (
+                <marker key={kind} id={`a-${kind}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0 0 L8 4 L0 8 z" fill={k.stroke} />
                 </marker>
               ))}
             </defs>
-            {COLS.map((c, i) => <text key={c} x={cx(i)} y="16" textAnchor="middle" fontSize="12" fill="#5f6672">{c}</text>)}
+            {COLS.map((c, i) => <text key={c} x={cx(i)} y="16" textAnchor="middle" fontSize="12" fill="var(--muted)">{c}</text>)}
             {LANES.map((l, i) => (
               <g key={l}>
-                <text x="0" y={cy(i) + 4} fontSize="12" fill="#5f6672">{l}</text>
-                <line x1="0" x2={W} y1={Y0 + LH * i} y2={Y0 + LH * i} stroke="#e3e6ea" />
+                <text x="0" y={cy(i) + 4} fontSize="12" fill="var(--muted)">{l}</text>
+                <line x1="0" x2={W} y1={Y0 + LH * i} y2={Y0 + LH * i} stroke="var(--border)" />
               </g>
             ))}
 
@@ -75,18 +84,18 @@ export default function Page() {
             <Arrow d={`M${b(8).mx} ${b(8).b} V${b(9).my} H${b(9).x}`} />
             <Arrow d={`M${b(9).r} ${b(9).my} H${b(10).mx} V${b(10).y}`} />
             {/* loop: missing fields */}
-            <Arrow color="#92400e" dash="5 4" d={`M${b(4).x + 20} ${b(4).b} V${b(5).my} H${b(5).r}`} />
-            <Arrow color="#92400e" dash="5 4" d={`M${b(5).mx} ${b(5).y} V${b(5).y - 10} H${b(3).mx} V${b(3).b}`} />
+            <Arrow kind="loop" d={`M${b(4).x + 20} ${b(4).b} V${b(5).my} H${b(5).r}`} />
+            <Arrow kind="loop" d={`M${b(5).mx} ${b(5).y} V${b(5).y - 10} H${b(3).mx} V${b(3).b}`} />
             {/* no go / review */}
-            <Arrow color="#831c1e" dash="4 4" d={`M${b(6).r} ${b(6).my} H${b(7).x}`} />
+            <Arrow kind="nogo" d={`M${b(6).r} ${b(6).my} H${b(7).x}`} />
             {/* output to review */}
-            <Arrow color="#2e7d32" dash="5 4" d={`M${b(10).r} ${b(10).my} H${W - 6} V${b(11).my} H${b(11).r}`} />
+            <Arrow kind="out" d={`M${b(10).r} ${b(10).my} H${W - 6} V${b(11).my} H${b(11).r}`} />
 
             {BOX.map((x) => {
               const p = L(x.c, x.l);
               return (
                 <g key={x.t}>
-                  <rect x={p.x} y={p.y} width={BW} height={BH} rx="7" fill={FILL[x.kind]} />
+                  <rect x={p.x} y={p.y} width={BW} height={BH} rx="7" fill={FILL[x.kind]} stroke={x.kind === "queue" ? "var(--blue-dark)" : "none"} strokeDasharray="2 3" />
                   <text x={p.mx} y={p.y + 17} textAnchor="middle" fontSize="12.5" fontWeight="600" fill={INK[x.kind]}>{x.n ? `${x.n} ` : ""}{x.t}</text>
                   <text x={p.mx} y={p.y + 32} textAnchor="middle" fontSize="11" fill={INK[x.kind]} opacity="0.85">{x.s}</text>
                 </g>
@@ -94,8 +103,8 @@ export default function Page() {
             })}
           </svg>
           <ul className="small muted" style={{ listStyle: "none", display: "flex", flexWrap: "wrap", gap: "6px 20px", margin: "8px 0 0", padding: 0 }}>
-            <li>Solid line: main run</li><li>Amber dashed: loop for missing fields</li><li>Red dashed: no go or review</li>
-            <li>Green dashed: output</li><li>Grey boxes: code</li><li>Blue boxes: AI</li><li>Black boxes: you</li>
+            <li>Solid line: main run</li><li>Light-blue dashes: loop for missing fields</li><li>Dotted: no go or review</li>
+            <li>Long dashes: output</li><li>Grey boxes: code</li><li>Blue boxes: AI</li><li>Dark boxes: you</li>
           </ul>
         </div>
       </section>

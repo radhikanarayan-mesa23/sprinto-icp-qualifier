@@ -5,7 +5,7 @@
 import { cleanHtml } from "./clean.js";
 import { buildReasons, checkEvidence, identityOk } from "./evidence.js";
 import { ExtractSkipped, extractFields } from "./extract.js";
-import { RUN_LIMITS, count, freshRecord, hit, hunterUsedThisMonth, passcodeOk, spendCall, usedToday, utcDay, utcHour,
+import { RUN_LIMITS, count, freshRecord, hit, hunterUsedThisMonth, spendCall, usedToday, utcDay, utcHour,
   visitorKey } from "./guards.js";
 import { safeFetch, validateDomain } from "./net.js";
 import { checkRobots } from "./robots.js";
@@ -48,42 +48,37 @@ const explain = (reason) => MESSAGES[reason] ??
 
 const reply = (status, code, message, extra = {}) => ({ status, body: { ok: false, error: { code, message }, ...extra } });
 
-export async function runDomain({ domain: rawDomain, passcode, ip }, deps) {
+export async function runDomain({ domain: rawDomain, ip }, deps) {
   const { db, env, cfg, limits = RUN_LIMITS, fetchFn = safeFetch, geminiFetch = fetch, now = () => new Date(),
-    sleep = (ms) => new Promise((r) => setTimeout(r, ms)), urlFor = (d) => `https://${d}/`, netOpts = {} } = deps;
+    sleep = (ms) => new Promise((r) => setTimeout(r, ms)), urlFor = (d) => `https://${d}/`, netOpts = {}, onStep } = deps;
   const t0 = Date.now();
   const steps = [];
-  const step = (id, label, state, detail) => steps.push({ id, label, state, detail });
+  let fetchInfo = null; // structured facts about the one request, for the page
+  const step = (id, label, state, detail) => { const s = { id, label, state, detail }; steps.push(s); onStep?.(s); }; // streamed live
 
   const v = validateDomain(rawDomain);
   if (!v.ok) return reply(400, "bad_domain", v.reason);
   const domain = v.domain;
 
   // ---- 1. guards (fail loudly, before any outbound request)
-  if (!env.RUN_PASSCODE) return reply(503, "disabled", "Live runs are switched off: no passcode is configured on the server.");
-  const visitor = visitorKey(ip || "unknown", env.RATE_LIMIT_SALT || env.RUN_PASSCODE);
+  // No sign-in: the page is open. Abuse is limited by the per-visitor and global hourly caps below, the shared daily
+  // model budget, the cache, the private-address block and this owner kill switch.
+  if (env.LIVE_RUNS_DISABLED === "1") return reply(503, "disabled", "Live runs are switched off by the site owner right now.");
+  const visitor = visitorKey(ip || "unknown", env.RATE_LIMIT_SALT || "sprinto-icp-qualifier");
   const hour = utcHour(now());
   const day = utcDay(now());
-  const failedPw = await count(db, `pw:${visitor}`, hour);
-  if (failedPw >= limits.wrongPasscodePerHour) {
-    return reply(429, "locked", `Too many wrong passcodes from this visitor. Try again after ${String(Number(hour.slice(11)) + 1).padStart(2, "0")}:00 UTC.`);
-  }
-  if (!passcodeOk(passcode, env.RUN_PASSCODE)) {
-    await hit(db, `pw:${visitor}`, hour, limits.wrongPasscodePerHour);
-    return reply(401, "bad_passcode", `That passcode is not right (${limits.wrongPasscodePerHour - failedPw - 1} attempts left this hour). Ask the project owner for the current one.`);
-  }
 
   const cached = await freshRecord(db, domain, cfg.cache_days, now());
   if (cached) { // cache by domain: no request, no model call, no budget, no rate-limit use
-    step("guards", "Guards", "ok", "Passcode accepted");
+    step("guards", "Guards", "ok", "Open demo, no sign-in needed");
     step("cache", "Cache", "ok", `Served from the stored record fetched ${cached.fetched_at.slice(0, 10)} (cache is ${cfg.cache_days} days). Nothing was fetched or spent.`);
-    return { status: 200, body: await view(db, cached, { cfg, steps, fromCache: true, visitor, hour, day, env, limits, saved: true, elapsed: (Date.now() - t0) / 1000 }) };
+    return { status: 200, body: await view(db, cached, { cfg, fetchInfo, steps, fromCache: true, visitor, hour, day, env, limits, saved: true, elapsed: (Date.now() - t0) / 1000 }) };
   }
   const mine = await hit(db, `run:${visitor}`, hour, limits.perVisitorPerHour);
   if (!mine.ok) return reply(429, "rate_limited", `You have used all ${limits.perVisitorPerHour} live runs allowed per visitor this hour. The limit resets at ${String(Number(hour.slice(11)) + 1).padStart(2, "0")}:00 UTC.`);
   const all = await hit(db, "run:all", hour, limits.globalPerHour);
   if (!all.ok) return reply(429, "demo_busy", `This demo allows ${limits.globalPerHour} live runs per hour across all visitors and that is used up. Try again after ${String(Number(hour.slice(11)) + 1).padStart(2, "0")}:00 UTC.`);
-  step("guards", "Guards", "ok", `Passcode accepted. Run ${mine.n} of ${limits.perVisitorPerHour} this hour for you`);
+  step("guards", "Guards", "ok", `Open demo, no sign-in needed. Run ${mine.n} of ${limits.perVisitorPerHour} this hour for you`);
 
   const fail = async (reason, pageFlags = [], extra = {}) => {
     const flags = ["live_partial_run", ...pageFlags];
@@ -93,7 +88,7 @@ export async function runDomain({ domain: rawDomain, passcode, ip }, deps) {
     const skipSave = NOT_STORED(reason);
     if (!skipSave) await saveRecord(db, rec);
     step("save", "Save", skipSave ? "skip" : "ok", skipSave ? (TRANSIENT(reason) ? "Not saved: a temporary problem should be retried, not cached" : "Not saved: refused addresses are never stored") : "Saved as a flagged record");
-    return { status: 200, body: await view(db, rec, { cfg, steps, visitor, hour, day, env, limits, saved: !skipSave, elapsed: (Date.now() - t0) / 1000, failure: reason, explanation: explain(reason) }) };
+    return { status: 200, body: await view(db, rec, { cfg, fetchInfo, steps, visitor, hour, day, env, limits, saved: !skipSave, elapsed: (Date.now() - t0) / 1000, failure: reason, explanation: explain(reason) }) };
   };
 
   // ---- 2. robots.txt, then a polite pause, then the one page
@@ -105,6 +100,7 @@ export async function runDomain({ domain: rawDomain, passcode, ip }, deps) {
   const page = await fetchFn(url, { timeoutMs: 6000, userAgent: cfg.user_agent, baseDomain: domain, ...netOpts });
   const reason = failureOf(page);
   const fetchedAt = now().toISOString();
+  fetchInfo = { status: page.status ?? 0, bytes: page.bytes ?? 0, redirects: page.hops?.length ?? 0, truncated: !!page.truncated, error: page.error ?? null };
   const pageRow = { path: "/", url: page.finalUrl ?? url, status: page.status ?? 0, method: "requests", fetched_at: fetchedAt,
     from_cache: false, failure_reason: reason, flags: [] };
   if (reason) {
@@ -201,7 +197,7 @@ export async function runDomain({ domain: rawDomain, passcode, ip }, deps) {
     fetch_method: "requests" });
   await saveRecord(db, rec);
   step("save", "Save", "ok", "Saved as a partial record. Open it to see the evidence trail.");
-  return { status: 200, body: await view(db, rec, { cfg, steps, visitor, hour, day, env, limits, saved: true, elapsed: (Date.now() - t0) / 1000,
+  return { status: 200, body: await view(db, rec, { cfg, fetchInfo, steps, visitor, hour, day, env, limits, saved: true, elapsed: (Date.now() - t0) / 1000,
     cleaned: { words: cleaned.words, tokens_before: cleaned.tokens_before, tokens_after: cleaned.tokens_after, preview: cleaned.text.slice(0, 1200), footer: cleaned.footer_signals }, extractNote }) };
 }
 
@@ -231,6 +227,8 @@ async function view(db, rec, o) {
     model: { calls: rec.model_calls, prompt_tokens: rec.prompt_tokens, output_tokens: rec.output_tokens, key_configured: !!o.env.GEMINI_API_KEY },
     guards: { visitor_runs_used: mine, visitor_runs_limit: o.limits.perVisitorPerHour, budget_used: used, budget_limit: Number.isFinite(budget) ? budget : null,
       hunter_used: await hunterUsedThisMonth(db, o.day.slice(0, 7)), hunter_cap: o.cfg.hunter.hard_stop_at },
+    fetch: o.fetchInfo ?? null,
+    fields: Object.entries(rec.extracted_fields ?? {}).map(([field, f]) => ({ field, value: f.value, quote: f.evidence_quote, source_url: f.source_url })),
     elapsed_seconds: o.elapsed, record_path: `/c/${rec.domain}`,
   };
 }

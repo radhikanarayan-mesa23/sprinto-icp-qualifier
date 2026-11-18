@@ -2,15 +2,10 @@
 // daily call counter and two simultaneous visitors can never overspend. IPs are stored only as a keyed hash.
 import crypto from "node:crypto";
 
-export const RUN_LIMITS = { perVisitorPerHour: 3, globalPerHour: 20, wrongPasscodePerHour: 5 };
+export const RUN_LIMITS = { perVisitorPerHour: 3, globalPerHour: 20 };
 export const utcDay = (d = new Date()) => d.toISOString().slice(0, 10);
 export const utcHour = (d = new Date()) => d.toISOString().slice(0, 13);
 
-const sha = (s) => crypto.createHash("sha256").update(String(s)).digest();
-export function passcodeOk(input, expected) {
-  if (!expected || typeof input !== "string") return false;
-  return crypto.timingSafeEqual(sha(input), sha(expected)); // constant-time, equal-length digests
-}
 export const visitorKey = (ip, salt) => crypto.createHmac("sha256", String(salt)).update(String(ip)).digest("hex").slice(0, 20);
 
 /** Atomic counter: increments only while n < limit. Returns { ok, n }. */

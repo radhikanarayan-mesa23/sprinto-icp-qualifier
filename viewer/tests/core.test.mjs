@@ -41,36 +41,32 @@ function make({ env = {}, limits, domains } = {}) {
     return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(obj) }] } }], usageMetadata: { promptTokenCount: 120, candidatesTokenCount: 30 } }));
   };
   const sleeps = [];
-  const base = { db: null, env: { RUN_PASSCODE: "pass-123", LIVE_DAILY_CALL_BUDGET: "10", GEMINI_API_KEY: "k", ...env }, cfg: config, limits,
+  const base = { db: null, env: { LIVE_DAILY_CALL_BUDGET: "10", GEMINI_API_KEY: "k", ...env }, cfg: config, limits,
     fetchFn: (u, o) => safeFetch(u, { ...o, unsafeAllowPrivateHosts: true }), geminiFetch: gemini, now: () => NOW,
     sleep: async (ms) => { sleeps.push(ms); }, urlFor: (d) => `${fx.base}/${FOLDER[d] ?? domains?.[d] ?? "nope"}/` };
   return { deps: base, prompts, sleeps, calls: () => modelCalls };
 }
-const go = async (t, domain, o = {}) => runDomain({ domain, passcode: "pass-123", ip: "1.1.1.1", ...o }, { ...t.deps, db: t.db });
+const go = async (t, domain, o = {}) => runDomain({ domain, ip: "1.1.1.1", ...o }, { ...t.deps, db: t.db });
 const setup = async (opts) => { const t = make(opts); t.db = await testDb(); return t; };
 
-test("switched off: no passcode configured means 503 and nothing is touched", async () => {
-  const t = await setup({ env: { RUN_PASSCODE: "" } });
+test("owner kill switch: LIVE_RUNS_DISABLED=1 returns 503 and touches nothing", async () => {
+  const t = await setup({ env: { LIVE_RUNS_DISABLED: "1" } });
   const r = await go(t, "acmeledger.com");
   assert.equal(r.status, 503); assert.equal(r.body.error.code, "disabled"); assert.equal(t.calls(), 0);
+  assert.equal((await t.db.query("SELECT COUNT(*)::int AS n FROM companies"))[0].n, 0);
+});
+
+test("open demo: no passcode or sign-in is asked for, and none is accepted as input", async () => {
+  const t = await setup();
+  const r = await go(t, "acmeledger.com", { passcode: "ignored-extra-field" });
+  assert.equal(r.status, 200); assert.match(r.body.steps[0].detail, /no sign-in/i);
+  assert.ok(!JSON.stringify(r.body).includes("ignored-extra-field"));
 });
 
 test("bad domains are refused with a fix, before anything is spent", async () => {
   const t = await setup();
   for (const d of ["127.0.0.1", "localhost", "acme.com:99", "not a domain", ""]) { const r = await go(t, d); assert.equal(r.status, 400, d); assert.ok(r.body.error.message.length > 10); }
   assert.equal(await count(t.db, "run:all", utcHour(NOW)), 0);
-});
-
-test("wrong passcode: 401 with attempts left; five wrong ones lock the visitor out, even for the right passcode", async () => {
-  const t = await setup();
-  const r1 = await go(t, "acmeledger.com", { passcode: "nope" });
-  assert.equal(r1.status, 401); assert.match(r1.body.error.message, /4 attempts left/);
-  for (let i = 0; i < 4; i += 1) await go(t, "acmeledger.com", { passcode: "nope" });
-  const locked = await go(t, "acmeledger.com");
-  assert.equal(locked.status, 429); assert.equal(locked.body.error.code, "locked");
-  const other = await go(t, "acmeledger.com", { ip: "9.9.9.9" });
-  assert.equal(other.status, 200, "another visitor is unaffected");
-  assert.equal(fx.base && t.calls() >= 1, true);
 });
 
 test("happy path: one homepage, one model call, evidence rows, a partial record saved in the CLI's shape", async () => {
@@ -93,12 +89,24 @@ test("happy path: one homepage, one model call, evidence rows, a partial record 
   assert.equal((await t.db.query("SELECT n FROM call_log WHERE day = $1", [DAY]))[0].n, 1);
 });
 
-test("the response never contains the passcode, the model key or the database settings", async () => {
-  const t = await setup({ env: { GEMINI_API_KEY: "SUPERSECRETKEY" } });
+test("stages stream live: onStep fires once per stage, in order, and equals the final steps; fetch facts and fields are structured", async () => {
+  const t = await setup();
+  const seen = [];
+  t.deps.onStep = (s) => seen.push(s);
+  const b = (await go(t, "acmeledger.com")).body;
+  assert.deepEqual(seen.map((s) => s.id), ["guards", "robots", "fetch", "clean", "extract", "evidence", "save"]);
+  assert.deepEqual(seen, b.steps);
+  assert.equal(b.fetch.status, 200); assert.ok(b.fetch.bytes > 1000); assert.equal(b.fetch.redirects, 0);
+  assert.equal(b.fields.find((f) => f.field === "funding_stage").value, "Series B");
+  assert.equal(b.fields.length, 8);
+});
+
+test("the response never contains the model key or the database settings", async () => {
+  const t = await setup({ env: { GEMINI_API_KEY: "SUPERSECRETKEY", DATABASE_URL: "postgres://u:p@h/db" } });
   const r = await go(t, "acmeledger.com");
   const text = JSON.stringify(r.body);
-  for (const s of ["pass-123", "SUPERSECRETKEY", "DATABASE_URL", "postgres"]) assert.ok(!text.includes(s), s);
-  assert.ok(!t.prompts.join("").includes("pass-123"));
+  for (const s of ["SUPERSECRETKEY", "DATABASE_URL", "postgres://", "x-goog-api-key"]) assert.ok(!text.includes(s), s);
+  assert.ok(!t.prompts.join("").includes("SUPERSECRETKEY"));
 });
 
 test("hard rules are applied in code: certified and consumer become no_go, a wrong company goes to a human", async () => {
@@ -135,7 +143,7 @@ test("per-visitor limit: the 4th fresh run in an hour is refused with the reset 
 });
 
 test("global limit: the whole demo is capped per hour", async () => {
-  const t = await setup({ limits: { perVisitorPerHour: 99, globalPerHour: 2, wrongPasscodePerHour: 5 } });
+  const t = await setup({ limits: { perVisitorPerHour: 99, globalPerHour: 2 } });
   await go(t, "acmeledger.com", { ip: "1.1.1.1" }); await go(t, "shieldly.com", { ip: "2.2.2.2" });
   const r = await go(t, "sunrisebakery.com", { ip: "3.3.3.3" });
   assert.equal(r.status, 429); assert.equal(r.body.error.code, "demo_busy");

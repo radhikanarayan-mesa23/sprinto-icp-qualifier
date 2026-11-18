@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCompany } from "../../../lib/db";
-import { ROWS, fmtDate, fmtSeconds, flagText, isGraceful, outcome, valueText } from "../../../lib/format";
-import { Dash, DecisionPill, Pill, Src } from "../../../components/ui";
+import { getCompany } from "@/lib/db";
+import { ROWS, fmtDate, fmtSeconds, flagText, isGraceful, outcome, valueText } from "@/lib/format";
+import { Dash, DecisionPill, Pill, Src } from "@/components/ui";
 
 export async function generateMetadata({ params }) {
   const { domain } = await params;

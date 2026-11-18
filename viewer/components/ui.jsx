@@ -1,4 +1,4 @@
-import { DECISIONS, source } from "../lib/format";
+import { DECISIONS, source } from "@/lib/format";
 
 export function Pill({ tone = "neutral", children }) {
   return <span className={`pill ${tone}`}>{children}</span>;
@@ -27,9 +27,9 @@ export function Mark() {
   // The product's mark: a funnel drawn as three shrinking bars (qualification narrows the list).
   return (
     <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
-      <rect x="1" y="3" width="20" height="4" rx="2" fill="#141414" />
-      <rect x="4" y="9" width="14" height="4" rx="2" fill="#141414" />
-      <rect x="7.5" y="15" width="7" height="4" rx="2" fill="#1d5fbf" />
+      <rect x="1" y="3" width="20" height="4" rx="2" fill="var(--blue-dark)" />
+      <rect x="4" y="9" width="14" height="4" rx="2" fill="var(--blue-dark)" />
+      <rect x="7.5" y="15" width="7" height="4" rx="2" fill="var(--blue-light)" />
     </svg>
   );
 }

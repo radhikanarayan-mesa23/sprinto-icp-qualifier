@@ -1,0 +1,167 @@
+/* Tailwind v4 theme + utilities only. Its global reset (preflight) is deliberately NOT loaded, so the ledger pages keep
+   their styling. Colours come from the palette tokens in globals.css (cream, dark blue, light blue, light green). */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+.axm-root {
+  --axm-sans: var(--font-axm-sans), ui-sans-serif, system-ui, sans-serif;
+  --axm-display: var(--font-axm-display), ui-serif, Georgia, serif;
+  --axm-mono: var(--font-axm-mono), ui-monospace, SFMono-Regular, monospace;
+  min-height: 100dvh;
+  font-family: var(--axm-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--cream);
+  font-variant-numeric: normal;
+}
+.axm-root *, .axm-root *::before, .axm-root *::after { box-sizing: border-box; }
+.axm-root h1, .axm-root p, .axm-root ul, .axm-root ol { margin: 0; padding: 0; }
+.axm-root a { color: inherit; text-decoration: none; }
+.axm-root button, .axm-root input { font: inherit; color: inherit; }
+.axm-root ul, .axm-root ol { list-style: none; }
+
+.axm-inset { padding-left: 24px; padding-right: 24px; }
+@media (min-width: 640px) { .axm-inset { padding-left: 40px; padding-right: 40px; } }
+@media (min-width: 1024px) { .axm-inset { padding-left: 72px; padding-right: 72px; } }
+
+.axm-panel { position: relative; isolation: isolate; display: flex; flex-direction: column; min-height: 100dvh; overflow: clip; background: var(--cream); }
+.axm-backdrop {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(60% 46% at 50% 18%, color-mix(in srgb, var(--blue-light) 16%, transparent), transparent 72%);
+}
+.axm-menu { background: var(--cream); box-shadow: inset 0 0 0 1px var(--border), 0 30px 60px -30px color-mix(in srgb, var(--blue-dark) 35%, transparent); }
+.axm-navlink { display: flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 999px; font-size: 14.5px; font-weight: 500; color: var(--muted); transition: background-color .2s, color .2s; }
+.axm-navlink:hover { color: var(--ink); background: color-mix(in srgb, var(--blue-dark) 7%, transparent); }
+.axm-navlink[aria-current="page"] { color: var(--ink); background: color-mix(in srgb, var(--blue-light) 30%, transparent); }
+.axm-root :focus-visible { outline: 2px solid var(--blue-dark); outline-offset: 3px; border-radius: 6px; }
+
+/* Doodles: scraping sketches in the margins, faint, drifting. Only where there are margins to fill. */
+.axm-doodles { position: absolute; inset: 0; z-index: -1; display: none; pointer-events: none; color: color-mix(in srgb, var(--blue-dark) 26%, transparent); }
+@media (min-width: 1100px) { .axm-doodles { display: block; } }
+.axm-doodle { position: absolute; height: auto; opacity: 0; translate: -50% -50%; animation: axm-doodle-in 1.2s var(--axm-in-delay) cubic-bezier(.16, 1, .3, 1) forwards, axm-float 7s var(--axm-float-delay) ease-in-out infinite alternate; }
+.axm-doodle-text { font-family: var(--axm-mono); font-size: 13px; white-space: nowrap; color: color-mix(in srgb, var(--blue-dark) 36%, transparent); }
+@keyframes axm-doodle-in { to { opacity: 1; } }
+@keyframes axm-float { from { translate: -50% calc(-50% - 4px); } to { translate: -50% calc(-50% + 4px); } }
+
+.axm-layout { flex: 1; display: flex; flex-direction: column; }
+.axm-head { position: relative; display: flex; flex-direction: column; align-items: center; padding-top: 28px; text-align: center; }
+.axm-title { font-family: var(--axm-display); font-size: clamp(2.4rem, min(1rem + 4.4vw, 9.5dvh), 5.5rem); font-weight: 400; font-optical-sizing: auto; line-height: .98; letter-spacing: -.035em; text-wrap: balance; color: var(--ink); }
+.axm-accent { color: var(--blue-dark); padding-right: .06em; position: relative; display: inline-block; font-style: italic; }
+.axm-accent-line { position: absolute; left: 0; right: 0; bottom: -.06em; height: .16em; overflow: hidden; animation: axm-draw 1s .55s cubic-bezier(.16, 1, .3, 1) both; color: var(--blue-light); }
+.axm-drift { display: block; height: 100%; width: 200%; animation: axm-drift 3.2s linear infinite; }
+@keyframes axm-drift { to { transform: translateX(-50%); } }
+@keyframes axm-draw { from { clip-path: inset(0 100% 0 0); } }
+.axm-sub { margin-top: 20px; max-width: 40rem; font-size: 16px; line-height: 1.6; color: var(--muted); text-wrap: balance; }
+@media (min-width: 640px) { .axm-sub { font-size: 18px; } }
+.axm-rise { animation: axm-rise .8s var(--axm-delay, 0s) cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes axm-rise { from { opacity: 0; translate: 0 22px; filter: blur(6px); } }
+@keyframes axm-rise-card { from { opacity: 0; translate: 0 64px; filter: blur(8px); } }
+
+/* The domain form: one pill, the way the hero buttons were */
+.axm-form { display: flex; align-items: center; gap: 8px; width: min(100%, 36rem); margin-top: 28px; padding: 6px; border-radius: 999px; background: var(--cream); box-shadow: inset 0 0 0 1px var(--control), 0 1px 2px color-mix(in srgb, var(--blue-dark) 10%, transparent), 0 18px 36px -22px color-mix(in srgb, var(--blue-dark) 40%, transparent); transition: box-shadow .25s; }
+.axm-form:focus-within { box-shadow: inset 0 0 0 2px var(--blue-dark), 0 18px 36px -22px color-mix(in srgb, var(--blue-dark) 45%, transparent); }
+.axm-input { flex: 1; min-width: 0; height: 44px; padding: 0 16px; border: 0; background: transparent; font-family: var(--axm-mono); font-size: 15px; color: var(--ink); }
+.axm-input::placeholder { color: var(--faint); }
+.axm-input:focus-visible { outline: none; }
+.axm-input:disabled { color: var(--faint); }
+.axm-root .axm-go { color: var(--cream); }
+.axm-go { position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 8px 0 20px; border: 0; border-radius: 999px; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--cream); background: var(--blue-dark); box-shadow: inset 0 1px 0 rgb(255 255 255 / .18), 0 10px 22px -12px color-mix(in srgb, var(--blue-dark) 70%, transparent); transition: transform .2s, background-color .2s; white-space: nowrap; }
+.axm-go:hover:not(:disabled) { transform: translateY(-1px); background: color-mix(in srgb, var(--blue-dark) 88%, #000); }
+.axm-go:active:not(:disabled) { transform: scale(.97); }
+.axm-go:disabled { cursor: not-allowed; background: var(--faint); box-shadow: none; }
+.axm-orb { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: rgb(255 255 255 / .16); }
+.axm-note { margin-top: 12px; font-size: 13px; color: var(--muted); max-width: 40rem; }
+.axm-note b { font-weight: 500; color: var(--ink); }
+.axm-alert { margin-top: 14px; max-width: 40rem; padding: 10px 16px; border-radius: 12px; font-size: 14px; text-align: left; background: color-mix(in srgb, var(--blue-dark) 8%, var(--cream)); box-shadow: inset 3px 0 0 var(--blue-dark); }
+.axm-alert b { font-weight: 600; }
+
+/* Result bar under the form */
+.axm-result { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 18px; max-width: 46rem; font-size: 14px; }
+.axm-result .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; }
+.axm-result .dom { font-family: var(--axm-mono); font-size: 13px; }
+.axm-result .why { color: var(--muted); text-align: center; text-wrap: balance; }
+.axm-pill { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.axm-pill.go { background: var(--green); color: var(--ink); }
+.axm-pill.go_flagged { background: var(--cream); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--pill-warning-line); }
+.axm-pill.manual_review { background: color-mix(in srgb, var(--blue-light) 38%, var(--cream)); color: var(--ink); }
+.axm-pill.no_go { background: var(--blue-dark); color: var(--cream); }
+.axm-pill.partial { background: color-mix(in srgb, var(--blue-dark) 9%, var(--cream)); color: var(--ink); box-shadow: inset 0 0 0 1px var(--border); }
+.axm-link { font-size: 14px; font-weight: 500; color: var(--blue-dark); text-decoration: underline; text-underline-offset: 3px; }
+
+/* The card: rises from the bottom edge and holds the stages */
+.axm-stage { flex: 1; display: flex; flex-direction: column; margin-top: 40px; }
+.axm-card { animation: axm-rise-card 1.1s .4s cubic-bezier(.16, 1, .3, 1) both; flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 1180px; margin-inline: auto; border: 1px solid var(--border); border-bottom: 0; border-radius: 26px 26px 0 0; background: var(--cream); box-shadow: 0 -1px 2px color-mix(in srgb, var(--blue-dark) 5%, transparent), 0 -30px 80px -48px color-mix(in srgb, var(--blue-dark) 40%, transparent); }
+.axm-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 10px 10px 10px 20px; border-bottom: 1px solid var(--border); }
+.axm-qwrap { display: flex; flex: 1 1 24rem; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.axm-card-question { display: flex; align-items: baseline; gap: 10px; font-family: var(--axm-display); font-size: 16px; font-style: italic; line-height: 1.35; color: var(--ink); }
+.axm-card-question .axm-q { font-family: var(--axm-mono); font-size: 11px; letter-spacing: .16em; font-style: normal; color: var(--muted); }
+.axm-badge { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; white-space: nowrap; border-radius: 999px; font-family: var(--axm-sans); font-size: 11px; font-style: normal; font-weight: 500; color: var(--ink); background: color-mix(in srgb, var(--green) 70%, var(--cream)); }
+.axm-badge.live { background: color-mix(in srgb, var(--blue-light) 34%, var(--cream)); }
+
+.axm-stepper { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; padding: 4px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--border); }
+.axm-step-btn { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; transition: background-color .2s, color .2s; }
+.axm-step-btn:hover { color: var(--ink); background: color-mix(in srgb, var(--blue-dark) 8%, transparent); }
+.axm-step-label { display: flex; min-width: 11.5rem; align-items: center; justify-content: center; gap: 10px; font-family: var(--axm-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+.axm-step-label .n { color: var(--muted); }
+.axm-dots { display: inline-flex; gap: 4px; }
+.axm-dot { width: 6px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--blue-dark) 18%, var(--cream)); transition: background-color .3s, transform .3s; }
+.axm-dot[data-s="ok"] { background: var(--blue-dark); }
+.axm-dot[data-s="flag"] { background: var(--blue-light); }
+.axm-dot[data-s="fail"] { background: var(--blue-dark); box-shadow: 0 0 0 2px var(--cream), 0 0 0 3px var(--blue-dark); }
+.axm-dot[data-s="skip"] { background: transparent; box-shadow: inset 0 0 0 1px var(--control); }
+.axm-dot[data-s="wait"] { background: var(--blue-light); animation: axm-pulse 1s ease-in-out infinite alternate; }
+.axm-dot[data-cur="true"] { transform: scale(1.5); }
+@keyframes axm-pulse { to { opacity: .35; } }
+
+/* The copy panel: graph paper, with what this stage read and decided, line by line */
+.axm-figure { position: relative; min-height: 250px; padding: 22px 20px 20px; border-bottom: 1px solid var(--border); background-image: linear-gradient(to right, color-mix(in srgb, var(--blue-light) 16%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--blue-light) 16%, transparent) 1px, transparent 1px); background-size: 24px 24px; background-position: center; }
+.axm-lines { display: grid; gap: 6px; max-width: 64rem; margin-inline: auto; }
+.axm-line { display: grid; grid-template-columns: 8.5rem 1fr; gap: 14px; align-items: baseline; font-family: var(--axm-mono); font-size: 13px; line-height: 1.65; }
+.axm-line .k { color: var(--muted); overflow-wrap: anywhere; }
+.axm-line .v { color: var(--ink); overflow-wrap: anywhere; }
+.axm-line[data-t="ok"] .v::before { content: "\2713\00a0"; color: var(--blue-dark); font-weight: 700; }
+.axm-line[data-t="flag"] .v::before { content: "!\00a0"; color: var(--blue-dark); font-weight: 700; background: color-mix(in srgb, var(--blue-light) 45%, transparent); padding: 0 4px; border-radius: 3px; margin-right: 2px; }
+.axm-line[data-t="fail"] .v::before { content: "\2717\00a0"; color: var(--cream); background: var(--blue-dark); font-weight: 700; padding: 0 4px; border-radius: 3px; margin-right: 2px; }
+.axm-line[data-t="skip"] .v { color: var(--muted); }
+.axm-line mark { background: color-mix(in srgb, var(--blue-light) 34%, transparent); color: var(--ink); padding: 0 3px; border-radius: 3px; box-shadow: inset 0 -2px 0 var(--blue-dark); }
+.axm-wait { display: flex; align-items: center; gap: 10px; font-family: var(--axm-mono); font-size: 13px; color: var(--muted); max-width: 64rem; margin-inline: auto; }
+.axm-wait svg { animation: axm-spin 1s linear infinite; }
+@keyframes axm-spin { to { rotate: 360deg; } }
+
+.axm-facts { display: flex; flex-wrap: wrap; gap: 4px 8px; padding: 12px 10px 14px; }
+.axm-fact { flex: 1 1 0; min-width: 6.5rem; padding: 8px 12px; border-radius: 10px; }
+.axm-fact .l { display: block; font-family: var(--axm-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.axm-fact .v { display: block; margin-top: 4px; font-family: var(--axm-mono); font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
+.axm-fact + .axm-fact { box-shadow: inset 1px 0 0 var(--rule); }
+.axm-card-foot { display: flex; align-items: flex-start; gap: 12px; min-height: 3.1em; padding: 11px 20px 12px; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--blue-dark) 3%, transparent); }
+.axm-insight-dot { margin-top: .55em; width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--blue-dark); box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue-light) 30%, transparent); }
+.axm-insight { font-family: var(--axm-display); font-size: 15px; line-height: 1.4; font-style: italic; color: var(--muted); text-wrap: pretty; }
+.axm-insight b { font-weight: 600; font-style: normal; color: var(--ink); }
+.axm-spend { padding: 0 20px 14px; font-size: 12px; color: var(--muted); }
+
+@media (min-width: 900px) {
+  .axm-card-head, .axm-card-foot { padding-left: 32px; }
+  .axm-card-question { font-size: 17px; }
+  .axm-figure { padding: 26px 32px 24px; }
+  .axm-facts { padding: 12px 22px 14px; }
+  .axm-spend { padding-left: 32px; }
+}
+@media (min-width: 1024px) {
+  .axm-panel { min-height: max(100dvh, 700px); }
+  .axm-head { padding-top: clamp(8px, 3dvh, 36px); }
+  .axm-stage { margin-top: clamp(32px, 6dvh, 72px); }
+}
+@media (max-width: 640px) {
+  .axm-form { flex-direction: column; align-items: stretch; border-radius: 22px; padding: 8px; }
+  .axm-go { justify-content: center; padding-right: 20px; }
+  .axm-orb { display: none; }
+  .axm-line { grid-template-columns: 1fr; gap: 0; margin-bottom: 4px; }
+  .axm-step-label { min-width: 9rem; }
+  .axm-fact + .axm-fact { box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .axm-drift, .axm-rise, .axm-card, .axm-accent-line, .axm-wait svg, .axm-dot { animation: none; }
+  .axm-doodle { animation: none; opacity: 1; }
+}

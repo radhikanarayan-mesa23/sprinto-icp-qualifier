@@ -31,10 +31,12 @@ npm test                                   # 70 tests: SSRF guard, Python parity
 ```
 
 ### Live "Run a domain" page (`/run`)
-One homepage, plain fetch only, behind a passcode. It checks robots.txt, waits, fetches once, cleans, extracts (one
+Styled after the Axiom hero (cream graph paper, serif headline, stage card); each scraper stage shows its own copy,
+streamed live as the server finishes it. Palette: light blue, cream, light green, dark blue.
+One homepage, plain fetch only. An open demo: no passcode and no sign-in, and the Gemini key stays on the server. It checks robots.txt, waits, fetches once, cleans, extracts (one
 model call) and runs the code-side evidence check, then saves a labelled **partial** record. It refuses private and
 internal addresses (checked again at connect time and on every redirect), stops at CAPTCHAs, challenges and logins, and
 shares the CLI's daily model-call counter (UTC day), its cache by domain and its Hunter cap. Limits: 3 runs per visitor
-per hour, 20 per hour overall, 5 wrong passcodes per hour. Server variables are listed in `viewer/.env.example`.
+per hour, 20 per hour overall, plus an owner kill switch (`LIVE_RUNS_DISABLED=1`). Server variables are listed in `viewer/.env.example`.
 The JavaScript cleaner and evidence check are ports of the Python ones; `scripts/sync_viewer_config.py` generates
 their settings from `config.yaml` and a golden-output test proves parity on every fixture page.

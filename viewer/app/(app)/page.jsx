@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { listCompanies } from "../lib/db";
-import { fmtDate } from "../lib/format";
-import { Dash, DecisionPill } from "../components/ui";
+import { listCompanies } from "@/lib/db";
+import { fmtDate } from "@/lib/format";
+import { Dash, DecisionPill } from "@/components/ui";
 
 export const metadata = { title: "Review queue" };
 
