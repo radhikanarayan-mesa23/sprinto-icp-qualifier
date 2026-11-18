@@ -122,8 +122,8 @@ def test_hunter_cap_in_run_is_flagged_not_silent(cfg, env):
     """[high] At the Hunter cap the go company is kept, flagged, and gets no draft."""
     f, llm, h = env()
     f.conn.execute("CREATE TABLE IF NOT EXISTS hunter_usage (month TEXT PRIMARY KEY, n INTEGER)")
-    from datetime import date
-    f.conn.execute("INSERT INTO hunter_usage VALUES (?, 25)", (date.today().strftime("%Y-%m"),))
+    from datetime import date, datetime, timezone
+    f.conn.execute("INSERT INTO hunter_usage VALUES (?, 25)", (datetime.now(timezone.utc).strftime("%Y-%m"),))
     res = run_domains(["acmeledger.test"], cfg, f.conn, f, llm, h, sleep=lambda s: None)
     r = res["records"][0]
     assert "hunter_cap_reached" in r["flags"] and r["contact"] is None and r["draft"]["status"] == "blocked"

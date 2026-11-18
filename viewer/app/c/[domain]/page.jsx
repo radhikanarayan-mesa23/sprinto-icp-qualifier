@@ -42,6 +42,10 @@ export default async function Page({ params, searchParams }) {
         <span className="chip">{fixture ? "Fixture, scored by test stand-ins" : "Live run"}</span>
       </div>
 
+      {r.decision === "partial" ? (
+        <p className="notice"><b>Partial run.</b> Only the homepage was fetched. The command-line agent would fetch up to 4 more pages, then qualify, find a contact and draft. Nothing here has been guessed.</p>
+      ) : null}
+
       <div className="strip">
         <div><div className="l">Decision</div><div className="v"><DecisionPill decision={r.decision} /></div>
           <div className="s">{r.queue ? `Queue: ${r.queue.replace("_", " ")}` : "No review queue"}</div></div>

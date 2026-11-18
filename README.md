@@ -27,4 +27,14 @@ Server-rendered Next.js reading from Postgres. `DATABASE_URL` is a server-side v
 
 ```bash
 cd viewer && npm install && npm run dev   # http://localhost:3100
+npm test                                   # 70 tests: SSRF guard, Python parity, guards, full live run on in-memory Postgres
 ```
+
+### Live "Run a domain" page (`/run`)
+One homepage, plain fetch only, behind a passcode. It checks robots.txt, waits, fetches once, cleans, extracts (one
+model call) and runs the code-side evidence check, then saves a labelled **partial** record. It refuses private and
+internal addresses (checked again at connect time and on every redirect), stops at CAPTCHAs, challenges and logins, and
+shares the CLI's daily model-call counter (UTC day), its cache by domain and its Hunter cap. Limits: 3 runs per visitor
+per hour, 20 per hour overall, 5 wrong passcodes per hour. Server variables are listed in `viewer/.env.example`.
+The JavaScript cleaner and evidence check are ports of the Python ones; `scripts/sync_viewer_config.py` generates
+their settings from `config.yaml` and a golden-output test proves parity on every fixture page.

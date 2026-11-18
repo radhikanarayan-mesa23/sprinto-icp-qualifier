@@ -2,12 +2,14 @@
 from . import contact, fetch, llm, store
 from .db import connect
 
-TABLES = ["companies", "pages", "call_log", "hunter_usage", "contacts_cache"]
+TABLES = ["companies", "pages", "call_log", "hunter_usage", "contacts_cache", "run_limits"]
+# Used by the viewer's live-run page: per-visitor and global hourly limits, and failed-passcode attempts.
+RUN_LIMITS_DDL = "CREATE TABLE IF NOT EXISTS run_limits (bucket TEXT, window_start TEXT, n INTEGER, PRIMARY KEY (bucket, window_start))"
 INDEXES = ["CREATE INDEX IF NOT EXISTS companies_decision_idx ON companies (decision)"]
 
 
 def all_ddl(db):
-    stmts = [store.ddl(db), fetch.SCHEMA, llm.CALL_LOG_DDL, contact.SCHEMA]
+    stmts = [store.ddl(db), fetch.SCHEMA, llm.CALL_LOG_DDL, contact.SCHEMA, RUN_LIMITS_DDL]
     out = []
     for s in stmts:
         out += [x.strip() for x in s.split(";") if x.strip()]

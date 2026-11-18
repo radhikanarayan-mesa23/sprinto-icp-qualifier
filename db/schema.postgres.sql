@@ -11,4 +11,6 @@ CREATE TABLE IF NOT EXISTS hunter_usage (month TEXT PRIMARY KEY, n INTEGER);
 
 CREATE TABLE IF NOT EXISTS contacts_cache (domain TEXT PRIMARY KEY, searched_at TEXT, result_json TEXT);
 
+CREATE TABLE IF NOT EXISTS run_limits (bucket TEXT, window_start TEXT, n INTEGER, PRIMARY KEY (bucket, window_start));
+
 CREATE INDEX IF NOT EXISTS companies_decision_idx ON companies (decision);

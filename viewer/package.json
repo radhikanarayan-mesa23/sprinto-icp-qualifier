@@ -7,13 +7,21 @@
     "predev": "node scripts/copy-fixtures.mjs",
     "dev": "next dev -p 3100",
     "build": "next build",
-    "start": "next start -p 3100"
+    "start": "next start -p 3100",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.1",
+    "ajv": "^8.20.0",
+    "cheerio": "^1.2.0",
     "next": "^16.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "server-only": "^0.0.1"
+    "robots-parser": "^3.0.1",
+    "server-only": "^0.0.1",
+    "undici": "^8.12.4"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16"
   }
 }

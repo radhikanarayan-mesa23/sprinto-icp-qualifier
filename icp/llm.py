@@ -1,7 +1,7 @@
 """Gemini REST client with budget enforcement, schema validation and a single retry.
 The API key is read from the environment, sent in a header (never in the URL) and never logged."""
 import json
-from datetime import date
+from datetime import datetime, timezone
 
 import jsonschema
 import requests
@@ -29,7 +29,7 @@ class CallBudget:
         self.company_calls = {}
 
     def _today(self):
-        return date.today().isoformat()
+        return datetime.now(timezone.utc).date().isoformat()  # UTC, so the CLI and Vercel count the same day
 
     def used_today(self):
         row = self.conn.execute("SELECT n FROM call_log WHERE day=?", (self._today(),)).fetchone()

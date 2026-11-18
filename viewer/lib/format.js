@@ -6,6 +6,7 @@ export const DECISIONS = {
   go_flagged: { label: "Go, flagged", tone: "warning" },
   manual_review: { label: "Manual review", tone: "neutral" },
   no_go: { label: "No go", tone: "negative" },
+  partial: { label: "Partial run", tone: "neutral" },
 };
 
 export const ROWS = {
@@ -51,6 +52,14 @@ const FLAGS = [
   ["hunter_usage_warning", "Hunter usage is approaching the monthly cap."],
   ["failure:", "This company stopped with a failure and was queued for a human."],
   ["override:", "The model's answer was overridden by a code rule."],
+  ["live_partial_run", "A live run covers the homepage only. The command-line agent fetches up to 4 more pages, then qualifies, finds a contact and drafts."],
+  ["plain_fetch_only", "Live runs use a plain request with no JavaScript browser fallback, so a page that builds itself in the browser can look empty."],
+  ["extract_skipped:no_model_key", "No model key is configured on the server yet, so extraction was skipped and only the scraper ran."],
+  ["extract_skipped:daily_budget", "The shared daily model-call budget is spent, so extraction was refused. The fetch and clean results are real."],
+  ["extract_skipped:budget_not_configured", "No daily budget is configured for live runs, so no model call can be made safely."],
+  ["extract_skipped:no_text", "The page had no readable text, so no model call was made."],
+  ["extract_skipped:time_limit", "Extraction was skipped to stay inside the request time limit."],
+  ["extract_skipped", "Extraction did not run, so no field was guessed."],
   ["short_circuit", "A hard rule decided this company before any further work."],
 ];
 
@@ -60,7 +69,7 @@ export function flagText(flag) {
 }
 
 // Flags that are the agent doing the right thing: stopping and flagging rather than guessing.
-const GRACEFUL = ["thin_page", "identity_mismatch", "barrier_on", "prompt_injection_ignored", "playwright_unavailable",
+const GRACEFUL = ["live_partial_run", "plain_fetch_only", "extract_skipped", "thin_page", "identity_mismatch", "barrier_on", "prompt_injection_ignored", "playwright_unavailable",
   "page_unavailable", "b2b_unresolved", "draft_blocked", "no_suitable_contact", "contact_skipped", "draft_skipped",
   "cert_unverified", "stage_unresolved", "compliance_low", "identity_unverified"];
 export const isGraceful = (f) => GRACEFUL.some((g) => f.startsWith(g));

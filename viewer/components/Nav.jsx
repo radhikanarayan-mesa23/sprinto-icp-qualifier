@@ -6,6 +6,7 @@ export default function Nav({ human }) {
   const path = usePathname();
   const items = [
     { href: "/", label: "Review queue", count: human > 0 ? human : null, on: path === "/" || path.startsWith("/c/") },
+    { href: "/run", label: "Run a domain", on: path === "/run" },
     { href: "/how", label: "How it works", on: path === "/how" },
   ];
   return (

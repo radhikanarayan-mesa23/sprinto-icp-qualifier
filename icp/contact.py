@@ -6,7 +6,7 @@ Hunter's text (names, titles) is data: it is truncated, stored as plain strings 
 import json
 import re
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -37,7 +37,7 @@ def _clean(s):
 
 
 class HunterUsage:
-    def __init__(self, conn, cfg, today=date.today):
+    def __init__(self, conn, cfg, today=lambda: datetime.now(timezone.utc).date()):
         self.conn, self.cfg, self.today = conn, cfg["hunter"], today
         conn.executescript(SCHEMA)
 

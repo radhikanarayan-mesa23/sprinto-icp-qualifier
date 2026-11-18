@@ -1,5 +1,5 @@
 """M5: contact finder. Hunter mocked. Severity in each docstring."""
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 import requests
@@ -84,7 +84,7 @@ def test_go_flagged_still_gets_a_contact(cfg, usage):
 
 def test_warn_at_20_and_hard_stop_at_25(cfg, usage):
     """[high] Warn at 20, refuse at 25 without calling Hunter, and say so."""
-    usage.conn.execute("INSERT INTO hunter_usage VALUES (?, 19)", (date.today().strftime("%Y-%m"),))
+    usage.conn.execute("INSERT INTO hunter_usage VALUES (?, 19)", (datetime.now(timezone.utc).strftime("%Y-%m"),))
     out, _ = find(cfg, usage, [person("A", "B", "CTO")], domain="w.test")
     assert out["searches_used"] == 20 and any(f.startswith("hunter_usage_warning:20") for f in out["flags"])
     usage.conn.execute("UPDATE hunter_usage SET n=25")
