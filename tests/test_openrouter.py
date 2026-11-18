@@ -146,3 +146,46 @@ def test_empty_object_or_missing_fields_are_still_invalid(cfg, key, monkeypatch)
         monkeypatch.setattr("icp.llm.requests.post", lambda *a, **k: ok(bad))
         with pytest.raises(InvalidModelOutput):
             extract(LLM(cfg, CallBudget(open_db(":memory:"), 10, 7)), "x.test", [page])
+
+
+def test_timeouts_retry_then_succeed_and_exhausted_timeouts_become_model_unavailable(cfg, key, monkeypatch):
+    """[high] A hung call (ReadTimeout) is retried with backoff; if it keeps hanging it surfaces as ModelUnavailable, not a crash."""
+    from icp.llm import ModelUnavailable
+    seq = [requests.ReadTimeout("slow"), ok('{"x": 1}')]
+
+    def post(*a, **k):
+        x = seq.pop(0)
+        if isinstance(x, Exception):
+            raise x
+        return x
+
+    monkeypatch.setattr("icp.llm.requests.post", post)
+    assert openrouter_transport(cfg, sleep=lambda s: None)(BODY)["candidates"]
+    monkeypatch.setattr("icp.llm.requests.post", lambda *a, **k: (_ for _ in ()).throw(requests.ReadTimeout("slow")))
+    monkeypatch.setattr("icp.llm.time.sleep", lambda s: None)
+    llm = LLM(cfg, CallBudget(open_db(":memory:"), 10, 7), openrouter_transport(cfg, sleep=lambda s: None))
+    with pytest.raises(ModelUnavailable):
+        llm.generate_json("a.test", "s", "u", {"type": "object"})
+
+
+def test_qualify_and_draft_prompts_spell_out_the_json_shape():
+    """[high] Real models deviated (reasons as a dict) when the shape was only in the schema. The prompts now show it."""
+    from icp.draft import SYSTEM as DRAFT
+    from icp.qualify import SYSTEM as QUALIFY
+    assert "reasons is an ARRAY of four objects" in QUALIFY and '"verdict"' in QUALIFY
+    assert '"pain_points": [{"text"' in DRAFT and '"hook": {"field"' in DRAFT and '"claims": [{"claim"' in DRAFT
+
+
+def test_model_unavailable_queues_the_company_and_is_retried_next_run(cfg, make_fetcher):
+    """[high] A provider outage never crashes a company: it is queued with its own reason and not cached."""
+    from icp.llm import ModelUnavailable
+    from icp.loop import process_company
+    from icp.store import RETRY_NEXT_RUN
+
+    def down(body):
+        raise requests.ConnectionError("no route")
+
+    llm = LLM(cfg, CallBudget(open_db(":memory:"), 50, 7), down)
+    st = process_company("acmeledger.test", make_fetcher(playwright_fn=None), llm, cfg)
+    assert st["queue"] == "human" and st["failure_reason"].startswith("model_unavailable:") and st["stop_reason"] == "model_unavailable"
+    assert "model_unavailable" in RETRY_NEXT_RUN

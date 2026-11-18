@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from .db import upsert
 
-RETRY_NEXT_RUN = {"budget_exhausted", "invalid_model_output", "unexpected"}
+RETRY_NEXT_RUN = {"budget_exhausted", "invalid_model_output", "model_unavailable", "unexpected"}
 JSON_COLS = ["pages_fetched", "extracted_fields", "icp_rows", "reasons", "flags", "contact", "contact_meta",
              "pain_points", "draft", "loop_trace", "injection_flags"]
 SCALAR_COLS = {"fetched_at": "TEXT", "fetch_method": "TEXT", "decision": "TEXT", "defence": "TEXT", "rank": "INTEGER",

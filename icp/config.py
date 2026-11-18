@@ -11,11 +11,13 @@ def load_config(path=None):
         return yaml.safe_load(f)
 
 
-def compute_daily_call_budget(cfg, n_domains, require_limit=False):
+def compute_daily_call_budget(cfg, n_domains, require_limit=False, already_used=0):
     """ceiling * n_domains + headroom, capped at the Gemini free-tier daily limit.
     Live runs pass require_limit=True: an unknown limit is an error, never a guess."""
     c = cfg["calls"]
-    budget = c["per_company_ceiling"] * n_domains + c["headroom"]
+    # The counter is per UTC day and shared across runs, so this run is allowed what it needs ON TOP of what is already used
+    # today; the daily cap still bounds the day's total.
+    budget = already_used + c["per_company_ceiling"] * n_domains + c["headroom"]
     key = "gemini_free_tier_daily_limit" if cfg["model"]["provider"] == "gemini" else "daily_cap"
     limit = c.get(key)
     if require_limit and not limit:

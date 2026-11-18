@@ -31,7 +31,19 @@ export default {
       "Type",
       "II",
       "Hi",
-      "Best"
+      "Best",
+      "B2B",
+      "B2C",
+      "SaaS",
+      "API",
+      "AI",
+      "IT",
+      "CEO",
+      "CTO",
+      "CISO",
+      "SSO",
+      "PCI",
+      "DSS"
     ],
     "hook_fields": [
       "compliance_pressure_signal",
@@ -193,7 +205,7 @@ export default {
     "provider": "openrouter",
     "reasoning_effort": "low",
     "temperature": 0,
-    "timeout_seconds": 60
+    "timeout_seconds": 30
   },
   "output_format": "report",
   "qualify": {

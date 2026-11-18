@@ -244,3 +244,11 @@ def test_api_key_goes_in_header_not_url(cfg, monkeypatch):
     monkeypatch.setattr("icp.llm.env", lambda n: "TESTKEY123")
     http_transport(cfg)({"x": 1})
     assert "TESTKEY123" not in seen["url"] and seen["headers"]["x-goog-api-key"] == "TESTKEY123"
+
+
+def test_budget_adds_this_runs_allowance_on_top_of_what_is_already_used(cfg):
+    """[high] Real run: a second run the same day was refused because 7 x n + 5 ignored earlier usage. The cap still bounds the day."""
+    assert compute_daily_call_budget(cfg, 2) == 19
+    assert compute_daily_call_budget(cfg, 2, already_used=30) == 49
+    cfg["calls"]["daily_cap"] = 40
+    assert compute_daily_call_budget(cfg, 2, already_used=30) == 40, "the daily cap bounds the total"

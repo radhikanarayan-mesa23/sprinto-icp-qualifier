@@ -14,7 +14,7 @@ import json
 import re
 from pathlib import Path
 
-from .llm import BudgetExhausted, InvalidModelOutput
+from .llm import BudgetExhausted, InvalidModelOutput, ModelUnavailable
 from .schema import FIELDS
 
 DRAFT_SCHEMA = {
@@ -43,13 +43,20 @@ Rules:
 - Use ONLY facts in the record. Never invent a name, number, customer, event, funding round or product.
 - Write only the middle of the email (the "body"). The system adds the greeting and sign-off.
 - The first sentence of the body is the hook: one observation about THEIR company, built on exactly one hook field
-  from the record. Put the exact words you rely on in hook.anchor, copied from that field's evidence_quote or value.
+  from the record. Put the exact words you rely on in hook.anchor: the SHORTEST phrase (one to four words) copied exactly from that field's
+  evidence_quote or value that carries the fact, such as "Series B" or "Enterprise". Never copy a messy list or table fragment.
 - Then name the two pain points as things someone in their role tends to face, framed as questions or observations,
   never as claims about their internal state. pain_points[].field is the stored field each one is tied to.
 - One sentence connecting to what Sprinto does. No sales pitch.
 - One low-effort ask (for example a 15-minute call, or "worth a conversation?").
 - Plain sentences, no bullets, no links, English, under 90 words for the body.
-- claims: every company-specific statement in the body, copied verbatim from the body, with the stored field it comes from."""
+- claims: every company-specific statement in the body, copied verbatim from the body, with the stored field it comes from.
+Return JSON in EXACTLY this shape (field values are names from the record, such as "funding_stage" or "compliance_pressure_signal"):
+{"pain_points": [{"text": "...", "field": "<field>"}, {"text": "...", "field": "<field>"}],
+ "hook": {"field": "<hook field>", "anchor": "<exact words copied from that field's evidence_quote or value>"},
+ "subject": "short subject",
+ "body": "the middle of the email",
+ "claims": [{"claim": "<sentence copied verbatim from the body>", "field": "<field>"}]}"""
 
 STOP_START = {w for w in """a an and are as at be but by can could did do does for from had has have how i if in is it its
 just may might my no not of on one or our out should so some than that the their then there these they this those to
@@ -96,14 +103,19 @@ def _tokens(s):
 
 
 def check_proper_nouns(text, corpus, allowed_terms):
-    known = {re.sub(r"['’]s$", "", t.lower()) for t in _tokens(corpus)} | {a.lower() for a in allowed_terms}
+    stem = lambda w: re.sub(r"(?:['’]s|s)$", "", w.lower())  # "Co-founders" is the plural of the stored title "Co-Founder"
+    known = {stem(t) for t in _tokens(corpus)} | {stem(a) for a in allowed_terms}
     bad = []
     for sent in re.split(r"(?<=[.!?])\s+|\n+", text):
         for i, w in enumerate(_tokens(sent)):
             if not w[0].isupper():
                 continue
-            base = re.sub(r"['’]s$", "", w.lower())
-            if base in known or (i == 0 and base in STOP_START):
+            base = stem(w)
+            if base in known:
+                continue
+            # A sentence-opening adverb or -ing word ("Additionally", "Serving") is ordinary prose, not a name. Anything else
+            # that opens a sentence, and every capitalised word inside one, must still be in the stored facts.
+            if i == 0 and (w.lower() in STOP_START or re.search(r"(ly|ing)$", w.lower())):
                 continue
             bad.append(w)
     return bad
@@ -185,8 +197,9 @@ def draft_email(state, qual, contact_res, llm, cfg):
 
     try:
         out, usage = llm.generate_json(domain, SYSTEM, build_prompt(state, contact, cands), DRAFT_SCHEMA)
-    except (InvalidModelOutput, BudgetExhausted) as e:
-        kind = "invalid_model_output" if isinstance(e, InvalidModelOutput) else "budget_exhausted"
+    except (InvalidModelOutput, BudgetExhausted, ModelUnavailable) as e:
+        kind = ("model_unavailable" if isinstance(e, ModelUnavailable) else "invalid_model_output" if isinstance(e, InvalidModelOutput)
+                else "budget_exhausted")
         return _result("failed", failure_reason=f"{kind}:{e}", flags=[f"draft_failed:{kind}"])
     state["model_calls"] += usage["calls"]
     state["prompt_tokens"] += usage["prompt_tokens"]

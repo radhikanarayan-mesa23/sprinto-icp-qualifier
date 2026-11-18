@@ -13,6 +13,10 @@ from .config import env
 CALL_LOG_DDL = "CREATE TABLE IF NOT EXISTS call_log (day TEXT PRIMARY KEY, n INTEGER)"
 
 
+class ModelUnavailable(Exception):
+    """The provider could not be reached or kept failing (timeouts, 5xx, 402). Queue for a human, retry on the next run."""
+
+
 class BudgetExhausted(Exception):
     pass
 
@@ -81,8 +85,14 @@ def openrouter_transport(cfg, sleep=time.sleep):
         if m.get("reasoning_effort"):
             payload["reasoning"] = {"effort": m["reasoning_effort"]}
         headers = {"Authorization": f"Bearer {key}", "X-Title": "Sprinto ICP Qualifier", "User-Agent": cfg["user_agent"]}
+        last = None
         for attempt in range(cfg["transient_retries"]):
-            r = requests.post(m["endpoint"], json=payload, headers=headers, timeout=m["timeout_seconds"])
+            try:
+                r = requests.post(m["endpoint"], json=payload, headers=headers, timeout=m["timeout_seconds"])
+            except (requests.Timeout, requests.ConnectionError) as e:  # transient: back off and try again
+                last = e
+                sleep(2 ** attempt)
+                continue
             if r.status_code == 429 or r.status_code >= 500:
                 sleep(2 ** attempt)
                 continue
@@ -91,6 +101,8 @@ def openrouter_transport(cfg, sleep=time.sleep):
             u = d.get("usage") or {}
             return {"candidates": [{"content": {"parts": [{"text": d["choices"][0]["message"]["content"]}]}}],
                     "usageMetadata": {"promptTokenCount": u.get("prompt_tokens", 0), "candidatesTokenCount": u.get("completion_tokens", 0)}}
+        if last is not None:
+            raise last
         r.raise_for_status()
         raise RuntimeError("model provider kept failing")
 
@@ -119,7 +131,10 @@ class LLM:
         for _ in range(1 + self.cfg["model"]["invalid_json_retries"]):
             self.budget.spend(domain)
             usage["calls"] += 1
-            resp = self.transport(body)
+            try:
+                resp = self.transport(body)
+            except requests.RequestException as e:
+                raise ModelUnavailable(f"{type(e).__name__}: {str(e)[:120]}") from e
             um = resp.get("usageMetadata", {})
             usage["prompt_tokens"] += um.get("promptTokenCount", 0)
             usage["output_tokens"] += um.get("candidatesTokenCount", 0)

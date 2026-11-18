@@ -5,6 +5,7 @@ const ROW_FIELDS = {
   already_certified: ["certifications_found"], b2b_saas: ["buyer_type", "product_description"],
   right_stage: ["funding_stage", "open_roles_count", "enterprise_signal"], compliance_pressure: ["compliance_pressure_signal"],
 };
+const STAGE_FIELD = { funding_stage: "funding_stage", open_roles: "open_roles_count", enterprise_tier: "enterprise_signal" };
 const SUFFIXES = ["inc", "llc", "ltd", "corp", "co", "gmbh", "limited", "corporation"];
 const SLD = ["co", "com", "org", "net", "ac", "gov"];
 
@@ -77,6 +78,7 @@ export function buildReasons(fields, rows, outcomes) {
     let f = null;
     for (const n of ROW_FIELDS[row]) if (fields[n].value !== null) { name = n; f = fields[n]; break; }
     if (row === "already_certified" && ev.status === "resolved") { name = "certifications_found"; f = fields.certifications_found; }
+    if (row === "right_stage" && ev.status === "resolved") { name = STAGE_FIELD[ev.met_by[0]]; f = fields[name]; } // cite what satisfied the row
     const item = { row, status: ev.status, outcome: outcomes[row], field: name, value: f ? f.value : null,
       source_url: (f && f.source_url) || ev.source_url || null, evidence_quote: f ? f.evidence_quote : null, verdict: null };
     const cite = name ? ` (field ${name}, source ${item.source_url}, quote: "${item.evidence_quote}")` : "";

@@ -147,3 +147,30 @@ def test_call_count_within_company_ceiling(go):
     """[medium] Good fit uses extract + qualify = 2 of 7 calls, leaving room for the draft call."""
     _, st, _ = go("acmeledger.test")
     assert st["model_calls"] == 2
+
+
+def test_right_stage_cites_the_field_that_satisfied_it_not_just_the_first_filled(cfg):
+    """[high] Real run (dub.co): stage was met by the enterprise tier but the report cited open_roles_count = 0. Cite the true basis."""
+    from icp.qualify import build_reasons
+    from icp.schema import FIELDS
+    empty = lambda: {"value": None, "source_url": None, "evidence_quote": None}  # noqa: E731
+    fields = {n: empty() for n in FIELDS}
+    fields["open_roles_count"] = {"value": 0, "source_url": "https://x.test/careers", "evidence_quote": "0 open roles"}
+    fields["enterprise_signal"] = {"value": "Enterprise", "source_url": "https://x.test/pricing", "evidence_quote": "Enterprise"}
+    rows = {"already_certified": {"status": "missing"}, "b2b_saas": {"status": "missing"}, "compliance_pressure": {"status": "missing"},
+            "right_stage": {"status": "resolved", "met_by": ["enterprise_tier"]}}
+    outcomes = {r: "resolved" if r == "right_stage" else "unanswered:x" for r in rows}
+    stage = next(r for r in build_reasons({"fields": fields, "rows": {"rows": rows}, "row_outcomes": outcomes}) if r["row"] == "right_stage")
+    assert stage["field"] == "enterprise_signal" and stage["source_url"].endswith("/pricing") and stage["evidence_quote"] == "Enterprise"
+
+
+def test_qualify_prompt_forbids_claiming_a_company_is_uncertified():
+    """[high] Real run: the model called dub.co 'uncertified' although /security was a 404. The prompt now forbids that."""
+    from icp.qualify import SYSTEM
+    assert "Never claim a company is" in SYSTEM and "not verified" in SYSTEM
+
+
+def test_qualify_prompt_does_not_let_unverified_rows_downgrade_a_go():
+    """[high] Real run (dub.co): a 404 on /security made the model say 'flag', sending a good company to manual review."""
+    from icp.qualify import SYSTEM
+    assert 'ONLY if the evidence conflicts or is odd' in SYSTEM and "does NOT justify" in SYSTEM

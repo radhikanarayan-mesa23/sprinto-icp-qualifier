@@ -7,7 +7,7 @@ At a cap, each unresolved row gets its configured `if_unanswered` action and the
 from .evidence import check_evidence
 from .identity import identity_ok
 from .extract import extract
-from .llm import BudgetExhausted, InvalidModelOutput
+from .llm import BudgetExhausted, InvalidModelOutput, ModelUnavailable
 
 PRIORITY = ["b2b_saas", "already_certified", "right_stage", "compliance_pressure"]
 BARRIERS = {"captcha", "cloudflare_challenge", "login_wall"}  # stop poking at the site; never bypass
@@ -176,8 +176,9 @@ def process_company(domain, fetcher, llm, cfg):
             state["stop_reason"] = "budget_exhausted"
             return state
         return finish("budget_exhausted")
-    except InvalidModelOutput as e:
+    except (InvalidModelOutput, ModelUnavailable) as e:
+        kind = "model_unavailable" if isinstance(e, ModelUnavailable) else "invalid_model_output"
         state["queue"] = "human"
-        state["failure_reason"] = f"invalid_model_output:{e}"
-        state["stop_reason"] = "invalid_model_output"
+        state["failure_reason"] = f"{kind}:{e}"
+        state["stop_reason"] = kind
         return state

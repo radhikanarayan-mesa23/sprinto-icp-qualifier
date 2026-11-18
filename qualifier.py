@@ -30,6 +30,13 @@ def parse_domains(text):
     return out, bad
 
 
+def show_progress(r):
+    line = f"  {r['domain']}: {r['decision']}  ({r['model_calls']} model calls, {r['elapsed_seconds']}s)"
+    if r["failure_reason"]:
+        line += f"  [{r['failure_reason'][:90]}]"
+    print(line, flush=True)
+
+
 def main(argv=None, deps=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("domains_file")
@@ -78,9 +85,11 @@ def main(argv=None, deps=None):
             print(f"database: SQLite {db}")
         conn = open_db(db)
         fetcher = Fetcher(cfg, conn)
+        budget = compute_daily_call_budget(cfg, len(domains), require_limit=True, already_used=CallBudget(conn, 0, 1).used_today())
+        print(f"budget for this run: {budget} model calls in total today (UTC), including what earlier runs already used")
     llm = deps["llm"] if deps else LLM(cfg, CallBudget(conn, budget, cfg["calls"]["per_company_ceiling"]))
     hunter = deps["hunter"] if deps else None
-    result = run_domains(domains, cfg, conn, fetcher, llm, hunter, run_source=(deps or {}).get("run_source", "live"))
+    result = run_domains(domains, cfg, conn, fetcher, llm, hunter, run_source=(deps or {}).get("run_source", "live"), progress=show_progress)
     path = write_output(result, cfg, out_dir=a.out, fmt=a.format)
     s = result["summary"]
     print(f"done: {s['companies']} companies, {s['by_decision']}, avg {s['avg_seconds_per_company']}s each -> {path}")

@@ -71,7 +71,7 @@ def _failed_record(domain, err, cfg, run_source, elapsed):
     return build_record(st, qual, cres, drec, cfg, run_source, elapsed)
 
 
-def run_domains(domains, cfg, conn, fetcher, llm, hunter_transport, run_source="live", sleep=time.sleep):
+def run_domains(domains, cfg, conn, fetcher, llm, hunter_transport, run_source="live", sleep=time.sleep, progress=None):
     usage = HunterUsage(conn, cfg)
     records, not_run, cached = [], [], []
     daily = llm.budget.daily_budget
@@ -95,6 +95,8 @@ def run_domains(domains, cfg, conn, fetcher, llm, hunter_transport, run_source="
             rec = _failed_record(d, e, cfg, run_source, time.monotonic() - t0)
         save_record(conn, rec)
         records.append(rec)
+        if progress:
+            progress(rec)
     return {"records": records, "not_run": not_run, "cached": cached,
             "summary": summarize(records, not_run, cached, cfg, llm, usage, run_source)}
 

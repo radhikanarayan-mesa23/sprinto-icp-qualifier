@@ -41,7 +41,7 @@ model:
   # OpenRouter only. Gemini 3.8 Flash always reasons; "low" cut a real extraction from 10-15 s to 3-6 s and about 2.5x the cost,
   # with identical grounded values on the pages tested (checked 2026-11-18). Raise it if extraction quality ever drops.
   reasoning_effort: low
-  timeout_seconds: 60
+  timeout_seconds: 30           # real calls take 4-15 s; a hung call is retried, then queued for a human
   invalid_json_retries: 1       # retry once, then log the reason and queue for human
   # USD per 1M tokens, from OpenRouter's model listing for google/gemini-3.8-flash (0.825 in, 4.125 out), 2026-11-18.
   pricing_usd_per_mtok: {input: 0.825, output: 4.125}
@@ -117,7 +117,8 @@ draft:
   output_dir: "outputs"
   # Hooks must be company-specific. product_description and company_name are too generic to hook on.
   hook_fields: ["compliance_pressure_signal", "funding_stage", "enterprise_signal", "open_roles_count"]
-  allowed_terms: ["Sprinto", "SOC", "ISO", "GDPR", "HIPAA", "Type", "II", "Hi", "Best"]
+  allowed_terms: ["Sprinto", "SOC", "ISO", "GDPR", "HIPAA", "Type", "II", "Hi", "Best", "B2B", "B2C", "SaaS", "API", "AI", "IT",
+                  "CEO", "CTO", "CISO", "SSO", "PCI", "DSS"]   # ordinary industry terms, not names
   allowed_numbers: ["2", "15", "27001"]   # SOC 2, a 15-minute call, ISO 27001
 
 # Run-level targets from the pre-build decisions (logged, never enforced)

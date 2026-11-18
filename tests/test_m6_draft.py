@@ -246,3 +246,35 @@ def test_draft_md_has_provenance_block_and_never_sends(pipe, cfg, tmp_path):
     assert path == tmp_path / "acmeledger.test" / "draft.md"
     assert "Provenance (claim -> field -> source)" in txt and "Nothing is sent" in txt and "PASS" in txt
     assert "compliance_pressure_signal" in txt and "http" in txt
+
+
+def test_plural_or_possessive_of_a_stored_word_is_not_an_invented_noun():
+    """[high] Real run (plausible.io): 'Co-founders' failed against the stored title 'Co-Founder'. Plurals pass; strangers still fail."""
+    from icp.draft import check_proper_nouns
+    corpus = "Plausible Marko Saric Co-Founder bootstrapped Security Practices"
+    assert check_proper_nouns("Many Co-founders ask about Plausible's Security Practices.", corpus, ["Sprinto"]) == []
+    assert check_proper_nouns("Stripe and Globex use it.", corpus, ["Sprinto"]) == ["Stripe", "Globex"]
+
+
+def test_draft_prompt_asks_for_the_shortest_exact_anchor():
+    """[medium] Real run (dub.co): the anchor was a garbled pricing-table fragment. Ask for the shortest exact phrase."""
+    from icp.draft import SYSTEM
+    assert "SHORTEST phrase" in SYSTEM and "Never copy a messy list or table fragment" in SYSTEM
+
+
+def test_sentence_opening_adverbs_and_ing_words_pass_but_invented_names_still_fail():
+    """[high] Real run (plausible.io): 'Serving' and 'Additionally' opened sentences and failed. Names must still be real."""
+    from icp.draft import check_proper_nouns
+    corpus = "Plausible Marko Saric Co-Founder"
+    ok = "Serving teams is hard. Additionally, Plausible stays small. Many Co-Founder roles exist."
+    assert check_proper_nouns(ok, corpus, ["Sprinto"]) == []
+    assert check_proper_nouns("Teams like Stripe trust it. Notion does too. Globex agrees.", corpus, ["Sprinto"]) == ["Stripe", "Notion", "Globex"]
+    assert check_proper_nouns("Stripe uses it.", corpus, ["Sprinto"]) == ["Stripe"], "a sentence-opening company name is still caught"
+
+
+def test_ordinary_industry_terms_are_not_invented_names(cfg):
+    """[medium] Real run (dub.co): 'B2B' failed the proper-noun check. Industry terms are allowed; company names still are not."""
+    from icp.draft import check_proper_nouns
+    terms = cfg["draft"]["allowed_terms"]
+    assert check_proper_nouns("Many B2B SaaS teams need SOC 2 for their API and SSO.", "Dub", terms) == []
+    assert check_proper_nouns("Many Globex teams need it.", "Dub", terms) == ["Globex"]
