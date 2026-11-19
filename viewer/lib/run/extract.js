@@ -67,6 +67,7 @@ export async function extractFields({ pages, cfg, apiKey, spend, fetchImpl = fet
     ? { url: m.endpoint,
         headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}`, "x-title": "Sprinto ICP Qualifier" },
         body: { model: m.name, temperature: m.temperature, response_format: { type: "json_object" },
+          provider: { only: ["google-vertex", "google-ai-studio"], allow_fallbacks: false }, // Google's own infrastructure only
           ...(m.reasoning_effort ? { reasoning: { effort: m.reasoning_effort } } : {}),
           messages: [{ role: "system", content: system }, { role: "user", content: user }] } }
     : { url: m.endpoint.replace("{model}", m.name),

@@ -10,6 +10,7 @@ import requests
 from .config import env
 
 
+OPENROUTER_PROVIDER = {"only": ["google-vertex", "google-ai-studio"], "allow_fallbacks": False}
 CALL_LOG_DDL = "CREATE TABLE IF NOT EXISTS call_log (day TEXT PRIMARY KEY, n INTEGER)"
 
 
@@ -82,6 +83,7 @@ def openrouter_transport(cfg, sleep=time.sleep):
             "messages": [{"role": "system", "content": body["systemInstruction"]["parts"][0]["text"]},
                          {"role": "user", "content": body["contents"][0]["parts"][0]["text"]}],
         }
+        payload["provider"] = OPENROUTER_PROVIDER  # Google's own infrastructure only, no silent fallback to another vendor
         if m.get("reasoning_effort"):
             payload["reasoning"] = {"effort": m["reasoning_effort"]}
         headers = {"Authorization": f"Bearer {key}", "X-Title": "Sprinto ICP Qualifier", "User-Agent": cfg["user_agent"]}

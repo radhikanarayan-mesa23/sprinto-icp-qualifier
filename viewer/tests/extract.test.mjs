@@ -111,6 +111,7 @@ test("a bare null for an unknown field is read as unknown, never invented; extra
   const out = await extractFields({ pages, cfg: config, apiKey: "k", spend: spender(2).fn, fetchImpl: async (u, init) => { sent = JSON.parse(init.body); return reply(raw)(); } });
   assert.equal(out.fields.buyer_type.value, "business"); assert.equal(out.fields.funding_stage.value, null); assert.equal(out.usage.calls, 1);
   assert.deepEqual(sent.reasoning, { effort: "low" });
+  assert.deepEqual(sent.provider, { only: ["google-vertex", "google-ai-studio"], allow_fallbacks: false });
   assert.equal(normalizeExtraction({ extra: 1 }).extra, 1);
   await assert.rejects(extractFields({ pages, cfg: config, apiKey: "k", spend: spender(2).fn, fetchImpl: reply({ ...raw, surprise: 1 }) }), (e) => e.reason === "invalid_model_output");
 });

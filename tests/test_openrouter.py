@@ -52,6 +52,7 @@ def test_request_shape_and_key_in_header_not_url(cfg, key, monkeypatch):
     assert seen["headers"]["Authorization"] == "Bearer SECRETKEY"
     j = seen["json"]
     assert j["reasoning"] == {"effort": "low"}
+    assert j["provider"] == {"only": ["google-vertex", "google-ai-studio"], "allow_fallbacks": False}  # Google infrastructure only
     assert j["model"] == "google/gemini-3.8-flash" and j["temperature"] == 0 and j["response_format"] == {"type": "json_object"}
     assert j["messages"] == [{"role": "system", "content": "SYS"}, {"role": "user", "content": "USER"}]
     assert out["candidates"][0]["content"]["parts"][0]["text"] == '{"a": 1}'
