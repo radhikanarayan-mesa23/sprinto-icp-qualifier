@@ -88,7 +88,12 @@ export async function extractFields({ pages, cfg, apiKey, spend, fetchImpl = fet
     } catch (e) {
       throw new ExtractSkipped("model_unreachable", e?.name === "TimeoutError" ? "The model timed out" : "The model could not be reached");
     }
-    if (!res.ok) throw new ExtractSkipped("model_error", `The model returned HTTP ${res.status}`);
+    if (!res.ok) {
+      // Provider error text only (e.g. "API key not valid"); never the request, so the key cannot appear in it.
+      let why = "";
+      try { const j = await res.json(); why = String(j?.error?.message ?? "").replace(/\s+/g, " ").slice(0, 140); } catch { /* body is optional */ }
+      throw new ExtractSkipped("model_error", `The model returned HTTP ${res.status}${why ? `: ${why}` : ""}`);
+    }
     let got;
     try {
       const json = await res.json();

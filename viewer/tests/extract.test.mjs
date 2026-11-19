@@ -120,3 +120,16 @@ test("an empty {} or a missing key is a malformed reply, not 'unknown': it is re
     await assert.rejects(extractFields({ pages, cfg: config, apiKey: "k", spend: spender(2).fn, fetchImpl: reply(bad) }), (e) => e.reason === "invalid_model_output");
   }
 });
+
+test("a non-OK model reply surfaces the provider's error text and never the key", async () => {
+  const s = spender(2);
+  const bad = async () => new Response(JSON.stringify({ error: { message: "API key not valid. Please pass a valid API key." } }), { status: 400 });
+  await assert.rejects(extractFields({ pages, cfg: gemini, apiKey: "SECRET-KEY-123", spend: s.fn, fetchImpl: bad }), (e) => {
+    assert.equal(e.reason, "model_error");
+    assert.match(e.message, /HTTP 400: API key not valid/);
+    assert.ok(!e.message.includes("SECRET-KEY-123"));
+    return true;
+  });
+  const noBody = async () => new Response("<html>", { status: 502 });
+  await assert.rejects(extractFields({ pages, cfg: gemini, apiKey: "k", spend: spender(2).fn, fetchImpl: noBody }), /HTTP 502$/);
+});
