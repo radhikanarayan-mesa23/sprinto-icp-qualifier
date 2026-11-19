@@ -248,3 +248,12 @@ test("MODEL_PRESET=gemini_free switches provider and key name; unknown preset th
   assert.equal(g.model.timeout_seconds, cfg.model.timeout_seconds);
   assert.throws(() => applyPreset(cfg, "nope"), /unknown MODEL_PRESET/);
 });
+
+test("modelKey: configured name wins; an OpenRouter key saved as GEMINI_API_KEY is accepted; nothing set gives undefined", async () => {
+  const { modelKey } = await import("../lib/run/core.js");
+  const { default: cfg } = await import("../lib/generated/config.js");
+  assert.equal(modelKey({ OPENROUTER_API_KEY: "a", GEMINI_API_KEY: "b" }, cfg), "a");
+  assert.equal(modelKey({ GEMINI_API_KEY: "b" }, cfg), "b");
+  assert.equal(modelKey({}, cfg), undefined);
+  assert.equal(modelKey({ GEMINI_API_KEY: "b" }, { model: { ...cfg.model, provider: "gemini", key_env: "GEMINI_API_KEY" } }), "b");
+});

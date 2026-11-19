@@ -46,6 +46,12 @@ const explain = (reason) => MESSAGES[reason] ??
   : reason.startsWith("network:") ? "The site could not be reached. Try again later."
   : reason);
 
+// The model key lives in the variable named by config (OPENROUTER_API_KEY). Fallback: a key saved under GEMINI_API_KEY,
+// because Vercel locks a variable's name after saving. The key is only ever sent in a header to the configured endpoint.
+export function modelKey(env, cfg) {
+  return env[cfg.model.key_env] || (cfg.model.provider === "openrouter" ? env.GEMINI_API_KEY : undefined) || undefined;
+}
+
 // MODEL_PRESET=gemini_free switches to Google's free-tier Gemini API (presets live in config.yaml). Unknown names throw.
 export function applyPreset(cfg, name) {
   if (!name) return cfg;
@@ -147,7 +153,7 @@ export async function runDomain({ domain: rawDomain, ip }, deps) {
   } else {
     try {
       if (!(budget > 0)) throw new ExtractSkipped("budget_not_configured", "LIVE_DAILY_CALL_BUDGET is not set, so no model call can be made safely");
-      const out = await extractFields({ pages: [pageForModel], cfg, apiKey: env[cfg.model.key_env], geminiFetch, fetchImpl: geminiFetch,
+      const out = await extractFields({ pages: [pageForModel], cfg, apiKey: modelKey(env, cfg), geminiFetch, fetchImpl: geminiFetch,
         spend: () => spendCall(db, day, budget),
         timeoutMs: Math.max(5000, Math.min(14000, 27000 - (Date.now() - t0))) }); // always finishes inside the 30 s function limit
       fields = out.fields;
@@ -240,7 +246,7 @@ async function view(db, rec, o) {
     failure: o.failure ?? rec.failure_reason ?? null, explanation: o.explanation ?? null, flags: rec.flags ?? [], steps: o.steps,
     rows: (rec.reasons ?? []).map((r) => ({ row: r.row, status: r.status, outcome: r.outcome, field: r.field, value: r.value, source_url: r.source_url, quote: r.evidence_quote })),
     cleaned: o.cleaned ?? null, extract_note: o.extractNote ?? null,
-    model: { calls: rec.model_calls, prompt_tokens: rec.prompt_tokens, output_tokens: rec.output_tokens, key_configured: !!o.env[o.cfg.model.key_env] },
+    model: { calls: rec.model_calls, prompt_tokens: rec.prompt_tokens, output_tokens: rec.output_tokens, key_configured: !!modelKey(o.env, o.cfg) },
     guards: { visitor_runs_used: mine, visitor_runs_limit: o.limits.perVisitorPerHour, budget_used: used, budget_limit: Number.isFinite(budget) ? budget : null,
       hunter_used: await hunterUsedThisMonth(db, o.day.slice(0, 7)), hunter_cap: o.cfg.hunter.hard_stop_at },
     fetch: o.fetchInfo ?? null,
