@@ -46,11 +46,20 @@ const explain = (reason) => MESSAGES[reason] ??
   : reason.startsWith("network:") ? "The site could not be reached. Try again later."
   : reason);
 
+// MODEL_PRESET=gemini_free switches to Google's free-tier Gemini API (presets live in config.yaml). Unknown names throw.
+export function applyPreset(cfg, name) {
+  if (!name) return cfg;
+  const preset = cfg.model_presets?.[name];
+  if (!preset) throw new Error(`unknown MODEL_PRESET ${name}`);
+  return { ...cfg, model: { ...cfg.model, ...preset.model }, calls: { ...cfg.calls, ...preset.calls } };
+}
+
 const reply = (status, code, message, extra = {}) => ({ status, body: { ok: false, error: { code, message }, ...extra } });
 
 export async function runDomain({ domain: rawDomain, ip }, deps) {
-  const { db, env, cfg, limits = RUN_LIMITS, fetchFn = safeFetch, geminiFetch = fetch, now = () => new Date(),
+  const { db, env, limits = RUN_LIMITS, fetchFn = safeFetch, geminiFetch = fetch, now = () => new Date(),
     sleep = (ms) => new Promise((r) => setTimeout(r, ms)), urlFor = (d) => `https://${d}/`, netOpts = {}, onStep } = deps;
+  const cfg = applyPreset(deps.cfg, env.MODEL_PRESET);
   const t0 = Date.now();
   const steps = [];
   let fetchInfo = null; // structured facts about the one request, for the page

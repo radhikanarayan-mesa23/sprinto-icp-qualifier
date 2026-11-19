@@ -128,3 +128,16 @@ targets:
   max_rewritten_share: 0.20     # measured by the reviewer, not by this tool
   kill_rewritten_share: 0.50
   kill_accuracy: 0.60
+
+# Opt-in model presets, selected by the MODEL_PRESET environment variable (CLI and live page). Default is the block above.
+# gemini_free: Google's own Gemini API on the free tier (no card). Key from https://aistudio.google.com/apikey in GEMINI_API_KEY.
+# The daily limit here is deliberately low; raise it to the figure your AI Studio console shows.
+model_presets:
+  gemini_free:
+    model:
+      provider: gemini
+      key_env: GEMINI_API_KEY
+      name: "gemini-3.8-flash"
+      endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    calls:
+      gemini_free_tier_daily_limit: 50

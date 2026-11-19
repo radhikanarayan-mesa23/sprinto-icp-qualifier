@@ -207,6 +207,19 @@ export default {
     "temperature": 0,
     "timeout_seconds": 30
   },
+  "model_presets": {
+    "gemini_free": {
+      "calls": {
+        "gemini_free_tier_daily_limit": 50
+      },
+      "model": {
+        "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        "key_env": "GEMINI_API_KEY",
+        "name": "gemini-3.8-flash",
+        "provider": "gemini"
+      }
+    }
+  },
   "output_format": "report",
   "qualify": {
     "go_flagged_flags": [

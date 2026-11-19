@@ -17,6 +17,8 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 Keys live only in `.env` (see `.env.example`). Nothing is read from code, logs or the browser.
 
+Free option (no card): `MODEL_PRESET=gemini_free` with a free `GEMINI_API_KEY` from aistudio.google.com/apikey, for the CLI and the live page.
+
 Model: Gemini Flash. `config.yaml` selects the provider: `openrouter` (default, `google/gemini-3.8-flash`, key in
 `OPENROUTER_API_KEY`, reasoning effort low, prices from OpenRouter's listing) or `gemini` (Google's own API, `GEMINI_API_KEY`).
 

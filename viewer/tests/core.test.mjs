@@ -237,3 +237,14 @@ test("spend counters are atomic: 8 racing callers for 5 slots, exactly 5 win; li
   assert.equal(hits, 3);
   assert.equal((await spendCall(db, "2026-01-01", 0)), false, "a zero budget refuses the first call");
 });
+
+test("MODEL_PRESET=gemini_free switches provider and key name; unknown preset throws; default is untouched", async () => {
+  const { applyPreset } = await import("../lib/run/core.js");
+  const { default: cfg } = await import("../lib/generated/config.js");
+  assert.equal(applyPreset(cfg, undefined), cfg);
+  const g = applyPreset(cfg, "gemini_free");
+  assert.equal(g.model.provider, "gemini");
+  assert.equal(g.model.key_env, "GEMINI_API_KEY");
+  assert.equal(g.model.timeout_seconds, cfg.model.timeout_seconds);
+  assert.throws(() => applyPreset(cfg, "nope"), /unknown MODEL_PRESET/);
+});

@@ -189,3 +189,17 @@ def test_model_unavailable_queues_the_company_and_is_retried_next_run(cfg, make_
     st = process_company("acmeledger.test", make_fetcher(playwright_fn=None), llm, cfg)
     assert st["queue"] == "human" and st["failure_reason"].startswith("model_unavailable:") and st["stop_reason"] == "model_unavailable"
     assert "model_unavailable" in RETRY_NEXT_RUN
+
+
+def test_model_preset_switches_to_gemini_free_and_unknown_preset_fails(monkeypatch):
+    from icp.config import load_config
+    monkeypatch.delenv("MODEL_PRESET", raising=False)
+    assert load_config()["model"]["provider"] == "openrouter"
+    monkeypatch.setenv("MODEL_PRESET", "gemini_free")
+    c = load_config()
+    assert c["model"]["provider"] == "gemini" and c["model"]["key_env"] == "GEMINI_API_KEY"
+    assert "{model}" in c["model"]["endpoint"] and c["calls"]["gemini_free_tier_daily_limit"] == 50
+    assert c["model"]["timeout_seconds"] == 30  # untouched fields survive the overlay
+    monkeypatch.setenv("MODEL_PRESET", "nope")
+    with pytest.raises(ValueError):
+        load_config()
