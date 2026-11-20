@@ -10,6 +10,7 @@ import { ModelSkipped, generateJson } from "./llm.js";
 import { applyUnanswered, notEvaluated, PRIORITY, selectNext, shortCircuit } from "./loop.js";
 import { BARRIERS, LOGIN, failureOf } from "./page.js";
 import { qualify } from "./qualify.js";
+import { renderViaReader } from "./render.js";
 import { findContact } from "./contact.js";
 import { draftEmail } from "./draft.js";
 
@@ -102,9 +103,14 @@ export async function runPipeline(ctx) {
         await sleep(cfg.request_delay_seconds * 1000);
         const pg = await fetchFn(url, { timeoutMs: 6000, userAgent: cfg.user_agent, baseDomain: domain, ...netOpts });
         let reason = failureOf(pg);
-        const cleaned = reason ? null : cleanHtml(pg.text, cfg);
+        let cleaned = reason ? null : cleanHtml(pg.text, cfg);
         if (!reason && LOGIN.test(pg.text) && cleaned.words < cfg.clean.thin_page_words) reason = "login_wall";
         const row = { path, url: pg.finalUrl ?? url, status: pg.status ?? 0, method: "requests", fetched_at: now().toISOString(), from_cache: false, failure_reason: reason, flags: [] };
+        let rendered = false;
+        if (!reason && cleaned.words < cfg.clean.thin_page_words && left() > 20000) { // built in the browser: read the rendered page
+          const r = await renderViaReader(row.url, cfg, { env, fetchImpl: ctx.readerFetch ?? fetch, baselineWords: cleaned.words });
+          if (r) { cleaned = r.cleaned; rendered = true; row.method = "reader"; row.flags.push("rendered_by_reader"); }
+        }
         state.pages.push(row);
         used[pool] = (used[pool] ?? 0) + 1;
         state.fetches += 1;
@@ -119,7 +125,8 @@ export async function runPipeline(ctx) {
           step("loop", `Fetch ${path}`, "skip", reason === "not_found_404" ? "Not found (404). Counted against the fetch cap; moving on." : `Unavailable (${reason}). Counted against the fetch cap; moving on.`);
           continue;
         }
-        if (cleaned.words < cfg.clean.thin_page_words) { row.flags.push("thin_page", "plain_fetch_only"); state.flags.push(`${path}:thin_page`, `${path}:plain_fetch_only`); }
+        if (rendered) state.flags.push(`${path}:rendered_by_reader`);
+        if (cleaned.words < cfg.clean.thin_page_words) { const why = rendered ? "thin_after_render" : "plain_fetch_only"; row.flags.push("thin_page", why); state.flags.push(`${path}:thin_page`, `${path}:${why}`); }
         if (cleaned.injection_flags.length) { state.injection.push(...cleaned.injection_flags); row.flags.push(`prompt_injection_ignored:${cleaned.injection_flags.length}`); }
         pages.push({ url: row.url, cleaned });
         await reextract();

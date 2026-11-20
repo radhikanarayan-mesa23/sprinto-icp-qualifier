@@ -203,3 +203,31 @@ test("proper-noun and number gate: ordinary compliance words pass, invented name
   assert.deepEqual(checkProperNouns("Tendos's seed round is big. Congrats to the team. Founders move fast.", "Tendos seed", allowed), [], "a name ending in s matches its possessive; ordinary openers pass");
   assert.deepEqual(checkNumbers("Over 500 customers and a 15 minute call", "Series B", config.draft.allowed_numbers), ["500"]);
 });
+
+// ---- JS-built sites: the thin plain fetch falls back to the rendering reader
+test("a site built in the browser (thin plain fetch) is read through the reader and then runs the full pipeline", async () => {
+  const t = await setup();
+  let readerUrl = null;
+  t.deps.readerFetch = async (url) => { readerUrl = String(url); return new Response(
+    "Title: Acme\n\nURL Source: x\n\nMarkdown Content:\n# Acme Ledger\n\nAcme Ledger helps finance teams reconcile revenue every single month without spreadsheets.\n\nWe raised a Series B to grow our engineering and customer teams.\n\nEnterprise customers trust Acme Ledger with their books and audits.\n\n[Pricing](https://acmeledger.com/pricing) ![logo](https://x/y.png)\n"); };
+  t.deps.urlFor = (d, p = "/") => `${fx.base}/${p === "/" ? "jsapp" : "jsapp" + p}`; // jsapp fixture: an empty JS shell
+  FOLDER["rendered.com"] = "jsapp";
+  const orig = CANNED.jsapp; CANNED.jsapp = CANNED.goodfit;
+  try {
+    const b = (await go(t, "rendered.com")).body;
+    assert.ok(readerUrl.startsWith("https://r.jina.ai/") && readerUrl.includes("/jsapp"), readerUrl);
+    assert.ok(b.flags.includes("rendered_by_reader")); assert.ok(!b.flags.includes("plain_fetch_only"));
+    assert.equal(b.pages[0].path, "/"); assert.ok(b.fields.find((f) => f.field === "buyer_type").value === "business", "fields were extracted from the rendered text");
+    const row = (await t.db.query("SELECT pages_fetched FROM companies WHERE domain='rendered.com'"))[0];
+    assert.equal(row.pages_fetched[0].method, "reader");
+  } finally { CANNED.jsapp = orig; delete FOLDER["rendered.com"]; }
+});
+
+test("the reader is not used for a page that already has enough text, and READER_DISABLED=1 switches it off", async () => {
+  const t = await setup();
+  let called = 0; t.deps.readerFetch = async () => { called += 1; return new Response("x"); };
+  await go(t, "acmeledger.com"); assert.equal(called, 0);
+  const t2 = await setup({ env: { READER_DISABLED: "1" } }); let c2 = 0; t2.deps.readerFetch = async () => { c2 += 1; return new Response("x"); };
+  t2.deps.urlFor = (d, p = "/") => `${fx.base}/jsapp${p === "/" ? "" : p}`; FOLDER["shell.com"] = "jsapp";
+  try { const b = (await go(t2, "shell.com")).body; assert.equal(c2, 0); assert.ok(b.flags.includes("plain_fetch_only")); } finally { delete FOLDER["shell.com"]; }
+});

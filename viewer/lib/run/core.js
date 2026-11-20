@@ -11,6 +11,7 @@ import { RUN_LIMITS, count, freshRecord, hit, hunterUsedThisMonth, spendCall, us
   visitorKey } from "./guards.js";
 import { safeFetch, validateDomain } from "./net.js";
 import { loadRobots } from "./robots.js";
+import { renderViaReader } from "./render.js";
 import { emptyDraft, saveRecord } from "./record.js";
 
 const TRANSIENT = (r) => r === "timeout" || r.startsWith("network:") || r.startsWith("transient_");
@@ -95,12 +96,17 @@ export async function runDomain({ domain: rawDomain, ip }, deps) {
   step("fetch", "Fetch homepage", "ok", `HTTP ${page.status}, ${page.bytes.toLocaleString("en-US")} bytes${page.hops.length ? `, ${page.hops.length} redirect${page.hops.length > 1 ? "s" : ""} on the same site` : ""}${page.truncated ? ", cut at the size cap" : ""}`);
 
   // ---- 3. clean
-  const cleaned = cleanHtml(page.text, cfg);
+  let cleaned = cleanHtml(page.text, cfg);
   if (LOGIN.test(page.text) && cleaned.words < cfg.clean.thin_page_words) return fail("login_wall", [], { pages_fetched: [{ ...pageRow, failure_reason: "login_wall" }] });
   const flags = ["live_partial_run"];
+  let rendered = false;
+  if (cleaned.words < cfg.clean.thin_page_words) { // a page built in the browser: read it through the rendering reader instead of giving up
+    const r = await renderViaReader(pageRow.url, cfg, { env, fetchImpl: deps.readerFetch ?? fetch, baselineWords: cleaned.words });
+    if (r) { cleaned = r.cleaned; rendered = true; pageRow.method = "reader"; pageRow.flags.push("rendered_by_reader"); flags.push("rendered_by_reader"); }
+  }
   if (cleaned.words < cfg.clean.thin_page_words) {
-    pageRow.flags.push("thin_page", "plain_fetch_only");
-    flags.push("thin_page", "plain_fetch_only");
+    pageRow.flags.push("thin_page", rendered ? "thin_after_render" : "plain_fetch_only");
+    flags.push("thin_page", rendered ? "thin_after_render" : "plain_fetch_only");
   }
   if (cleaned.injection_flags.length) { pageRow.flags.push(`prompt_injection_ignored:${cleaned.injection_flags.length}`); flags.push(`prompt_injection_ignored:${cleaned.injection_flags.length}`); }
   step("clean", "Clean", pageRow.flags.includes("thin_page") ? "flag" : "ok",
@@ -147,7 +153,7 @@ export async function runDomain({ domain: rawDomain, ip }, deps) {
   // ---- 5. the rest of the pipeline (evidence, more pages, qualify, contact, draft) when extraction produced fields
   if (fields) {
     const out = await runPipeline({ domain, cfg, env, db, day, budget, apiKey: modelKey(env, cfg), geminiFetch, fetchFn, urlFor, netOpts, sleep, now, step, t0,
-      robots, home: { row: pageRow, cleaned }, first: { fields, usage, flags: firstFlags }, hunterFetch: deps.hunterFetch });
+      robots, home: { row: pageRow, cleaned }, first: { fields, usage, flags: firstFlags }, hunterFetch: deps.hunterFetch, readerFetch: deps.readerFetch });
     await saveRecord(db, out.rec);
     step("save", "Save", "ok", out.drec.status === "drafted" ? "Saved the full record with its draft. Nothing was sent." : "Saved the full record. Open it to see the evidence trail.");
     return { status: 200, body: await view(db, out.rec, { cfg, fetchInfo, steps, visitor, hour, day, env, limits, saved: true, elapsed: (Date.now() - t0) / 1000,

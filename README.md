@@ -53,7 +53,7 @@ npm test                                   # 70 tests: SSRF guard, Python parity
 Styled after the Axiom hero (cream graph paper, serif headline, stage card); each scraper stage shows its own copy,
 streamed live as the server finishes it. Palette: light blue, cream, light green, dark blue.
 The same pipeline as the CLI, in JavaScript: homepage, evidence check, a bounded loop over up to 3 more pages (code picks them),
-qualify, Hunter contact search, and a draft behind the provenance gate. Plain fetch only (no browser, so JS-only sites flag as thin).
+qualify, Hunter contact search, and a draft behind the provenance gate. Plain fetch first; a page that comes back thin (a site built in the browser) is read through a rendering reader (`r.jina.ai`, off with `READER_DISABLED=1`, optional `JINA_API_KEY`), because Vercel functions have no browser.
 It checks robots.txt, waits politely, refuses private and internal addresses (checked again at connect time and on every redirect), stops
 at CAPTCHAs, challenges and logins, and stops starting new work early enough to finish inside Vercel's 60 s limit. It shares the CLI's
 daily model-call counter (UTC day), its cache by domain and its Hunter counter. Limits: 3 runs per visitor per hour, 20 per hour overall,
