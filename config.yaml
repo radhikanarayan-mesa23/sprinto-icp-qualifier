@@ -79,6 +79,9 @@ icp:
     # Attestations that a third party issues. "HIPAA" and "GDPR compliant" are deliberately NOT here: they are legal
     # requirements a company claims, not certificates it holds, and a healthcare or EU startup saying so is a buying signal.
     cert_patterns: ["SOC ?2", "ISO ?/?IEC ?27001", "ISO ?27001", "PCI[- ]?DSS"]
+    # A name only counts when words of holding or attesting sit right next to it (within 60 characters). A navigation menu or a
+    # product page that merely lists "SOC 2" (a compliance vendor, an auditor) does not make the company certified.
+    cert_holding_words: "\\b(certified|compliant|compliance report|attested|attestation|audited|accredited|we are|we're|we hold|we have|achieved|earned|received|maintains?|maintained|passed)\\b"
   b2b_saas:
     hard: true
     short_circuit: {when: "not_b2b_saas", action: "disqualify"}

@@ -4,13 +4,16 @@ import re
 
 def cert_regex_hits(cfg, pages):
     pats = cfg["icp"]["already_certified"]["cert_patterns"]
+    holding = re.compile(cfg["icp"]["already_certified"]["cert_holding_words"], re.I)
     hits = []
     for url, c in pages:
         blob = c.footer_signals + "\n" + c.text
         for p in pats:
-            m = re.search(p, blob, re.I)
-            if m:
-                hits.append({"cert": m.group(0), "source_url": url})
+            for m in re.finditer(p, blob, re.I):
+                near = blob[max(0, m.start() - 60):m.end() + 60]
+                if holding.search(near):
+                    hits.append({"cert": m.group(0), "source_url": url})
+                    break
     return hits
 
 

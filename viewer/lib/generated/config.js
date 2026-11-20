@@ -170,6 +170,7 @@ export default {
   },
   "icp": {
     "already_certified": {
+      "cert_holding_words": "\\b(certified|compliant|compliance report|attested|attestation|audited|accredited|we are|we're|we hold|we have|achieved|earned|received|maintains?|maintained|passed)\\b",
       "cert_patterns": [
         "SOC ?2",
         "ISO ?/?IEC ?27001",

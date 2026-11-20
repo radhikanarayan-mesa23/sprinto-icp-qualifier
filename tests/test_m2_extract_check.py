@@ -262,3 +262,13 @@ def test_hipaa_and_gdpr_claims_are_not_a_certification_but_soc2_still_is(cfg):
     assert cert_regex_hits(cfg, page("HIPAA-compliant infrastructure with audit-ready documentation. GDPR compliant.")) == []
     assert [h["cert"] for h in cert_regex_hits(cfg, page("We are SOC 2 Type II certified"))] == ["SOC 2"]
     assert cert_regex_hits(cfg, page("ISO 27001 and PCI DSS attested"))
+
+
+def test_cert_name_in_a_menu_is_not_a_certificate_but_holding_language_is(cfg):
+    """[high] Vanta's nav 'Trust Center SOC 2 ISO 27001 GDPR ... SOC 2 collection' must not disqualify; 'maintains a SOC 2 Type II attestation' must."""
+    from types import SimpleNamespace
+    from icp.evidence import cert_regex_hits
+    page = lambda t: [("https://x.test/", SimpleNamespace(footer_signals="", text=t))]
+    assert cert_regex_hits(cfg, page("Trust Center SOC 2 ISO 27001 GDPR HIPAA HITRUST SOC 2 collection ISO 27001 collection")) == []
+    assert cert_regex_hits(cfg, page("Vanta maintains a SOC 2 Type II attestation and an ISO 27001 compliance report"))
+    assert cert_regex_hits(cfg, page("We are SOC 2 Type II certified"))

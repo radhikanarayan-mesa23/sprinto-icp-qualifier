@@ -11,11 +11,14 @@ const SLD = ["co", "com", "org", "net", "ac", "gov"];
 
 export function certRegexHits(cfg, pages) {
   const hits = [];
+  const holding = new RegExp(cfg.icp.already_certified.cert_holding_words, "i");
   for (const page of Array.isArray(pages) ? pages : [pages]) {
     const blob = `${page.cleaned.footer_signals}\n${page.cleaned.text}`;
     for (const p of cfg.icp.already_certified.cert_patterns) {
-      const m = new RegExp(p, "i").exec(blob);
-      if (m) hits.push({ cert: m[0], source_url: page.url });
+      for (const m of blob.matchAll(new RegExp(p, "gi"))) {
+        // a name counts only with words of holding or attesting next to it, not a menu or product list
+        if (holding.test(blob.slice(Math.max(0, m.index - 60), m.index + m[0].length + 60))) { hits.push({ cert: m[0], source_url: page.url }); break; }
+      }
     }
   }
   return hits;
