@@ -106,7 +106,9 @@ def _tokens(s):
 
 
 def check_proper_nouns(text, corpus, allowed_terms):
-    stem = lambda w: re.sub(r"(?:['’]s|s)$", "", w.lower())  # "Co-founders" is the plural of the stored title "Co-Founder"
+    # "Co-founders" is the plural of the stored title "Co-Founder". Strip a possessive first, then a plural s, so "Tendos" and
+    # "Tendos's" both stem to "tendo" (a single alternation stemmed them differently and rejected the company's own name).
+    stem = lambda w: re.sub(r"s$", "", re.sub(r"['’]s$", "", w.lower()))
     known = {stem(t) for t in _tokens(corpus)} | {stem(a) for a in allowed_terms}
     bad = []
     for sent in re.split(r"(?<=[.!?])\s+|\n+", text):

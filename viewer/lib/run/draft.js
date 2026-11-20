@@ -40,7 +40,7 @@ const corpusOf = (state, contact) => {
 };
 
 export function checkProperNouns(text, corpus, allowedTerms) {
-  const stem = (w) => w.toLowerCase().replace(/(?:['’]s|s)$/, ""); // "Co-founders" is the plural of the stored title "Co-Founder"
+  const stem = (w) => w.toLowerCase().replace(/['’]s$/, "").replace(/s$/, ""); // possessive first, then plural: "Tendos" and "Tendos's" both give "tendo"
   const known = new Set([...tokens(corpus).map(stem), ...allowedTerms.map(stem)]);
   const bad = [];
   for (const sent of text.split(/(?<=[.!?])\s+|\n+/)) {

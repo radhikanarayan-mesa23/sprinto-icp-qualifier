@@ -4,6 +4,7 @@ Caps: per-row fetch limits (compliance shares the stage pool), a global ceiling 
 the per-company model-call ceiling and the daily budget. The homepage is request one and is not counted.
 At a cap, each unresolved row gets its configured `if_unanswered` action and the loop stops.
 """
+from .discover import apply_news_hint
 from .evidence import check_evidence
 from .identity import identity_ok
 from .extract import extract
@@ -75,7 +76,7 @@ def _apply_unanswered(rows, cfg, state):
     return out
 
 
-def process_company(domain, fetcher, llm, cfg):
+def process_company(domain, fetcher, llm, cfg, hint=None):
     state = {"domain": domain, "pages": [], "trace": [], "flags": [], "queue": None, "failure_reason": None,
              "stop_reason": None, "fields": None, "rows": None, "row_outcomes": None, "lower_rank": False,
              "fetches_beyond_homepage": 0, "model_calls": 0, "prompt_tokens": 0, "output_tokens": 0,
@@ -99,8 +100,9 @@ def process_company(domain, fetcher, llm, cfg):
         state["prompt_tokens"] += ex["usage"]["prompt_tokens"]
         state["output_tokens"] += ex["usage"]["output_tokens"]
         state["fields"] = ex["fields"]
+        news_flag = apply_news_hint(state["fields"], hint)  # a stage the page did not state, taken from a sourced headline
         state["rows"] = check_evidence(ex["fields"], cfg, pages)
-        state["extract_flags"] = ex["flags"] + state["rows"]["notes"]
+        state["extract_flags"] = ex["flags"] + state["rows"]["notes"] + ([news_flag] if news_flag else [])
 
     # 1. homepage: request one, not counted against the cap. A permanent barrier here aborts the company.
     home = fetcher.fetch_page(domain, "/")

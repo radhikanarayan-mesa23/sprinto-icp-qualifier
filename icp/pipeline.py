@@ -71,7 +71,7 @@ def _failed_record(domain, err, cfg, run_source, elapsed):
     return build_record(st, qual, cres, drec, cfg, run_source, elapsed)
 
 
-def run_domains(domains, cfg, conn, fetcher, llm, hunter_transport, run_source="live", sleep=time.sleep, progress=None):
+def run_domains(domains, cfg, conn, fetcher, llm, hunter_transport, run_source="live", sleep=time.sleep, progress=None, hints=None):
     usage = HunterUsage(conn, cfg)
     records, not_run, cached = [], [], []
     daily = llm.budget.daily_budget
@@ -86,7 +86,7 @@ def run_domains(domains, cfg, conn, fetcher, llm, hunter_transport, run_source="
             break
         t0 = time.monotonic()
         try:
-            st = process_company(d, fetcher, llm, cfg)
+            st = process_company(d, fetcher, llm, cfg, (hints or {}).get(d))
             q = qualify(st, llm, cfg)
             c = find_contact(d, q["decision"], usage, cfg, hunter_transport, sleep=sleep)
             dr = draft_email(st, q, c, llm, cfg)

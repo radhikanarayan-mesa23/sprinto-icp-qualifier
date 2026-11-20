@@ -79,7 +79,15 @@ export default {
       "Hence",
       "Indeed",
       "Notably",
-      "Specifically"
+      "Specifically",
+      "Congrats",
+      "Congratulations",
+      "Founder",
+      "Founders",
+      "Leaders",
+      "Engineers",
+      "Startups",
+      "Growth"
     ],
     "hook_fields": [
       "compliance_pressure_signal",

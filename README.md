@@ -22,6 +22,20 @@ Free option (no card): `MODEL_PRESET=gemini_free` with a free `GEMINI_API_KEY` f
 Model: Gemini Flash. `config.yaml` selects the provider: `openrouter` (default, `google/gemini-3.8-flash`, key in
 `OPENROUTER_API_KEY`, reasoning effort low, prices from OpenRouter's listing) or `gemini` (Google's own API, `GEMINI_API_KEY`).
 
+## Finding prospects (Google News RSS)
+`scripts/discover.py` reads funding headlines from Google News RSS, takes the company named before the funding verb and the round the
+headline states ("Raises $15M Series A"), and resolves each company to a domain by fetching candidate homepages and checking the page
+really is that company (title, site name or heading must contain the name; parked and redirected domains are dropped). It writes
+`<out>.txt` (domains for the CLI) and `<out>.json` (headline, link, stage and the exact quote behind each). Run the scraper with
+`--news <out>.json` and a stage the company's own site does not state is filled from the headline, grounded like any other field
+(quote verbatim in the headline, source = the news link), so it resolves the "right stage" row and can be the draft's hook.
+Domains are matched by name, so a common name can land on a different company: check the company in the queue before outreach.
+
+```bash
+.venv/bin/python scripts/discover.py --limit 15 --out data/discovered
+.venv/bin/python qualifier.py data/discovered.txt --news data/discovered.json --db data/discovered.db --format json --out data/discovered_out
+```
+
 ## Storage
 SQLite locally, Postgres (Neon) when `DATABASE_URL` is set. `python scripts/neon_migrate.py --schema-only` creates and
 verifies the schema; `db/schema.postgres.sql` is the same DDL.

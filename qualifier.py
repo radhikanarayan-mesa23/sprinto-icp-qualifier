@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from icp.config import compute_daily_call_budget, env, load_config  # noqa: E402
 from icp.fetch import Fetcher, open_db  # noqa: E402
 from icp.llm import LLM, CallBudget  # noqa: E402
+from icp.discover import load_hints  # noqa: E402
 from icp.pipeline import run_domains  # noqa: E402
 from icp.report import write_output  # noqa: E402
 
@@ -44,6 +45,7 @@ def main(argv=None, deps=None):
     ap.add_argument("--config", default=None)
     ap.add_argument("--db", default=None)
     ap.add_argument("--out", default="outputs")
+    ap.add_argument("--news", default=None, help="JSON written by scripts/discover.py: funding stages taken from news headlines")
     ap.add_argument("--dry-run", action="store_true", help="show the plan and computed budget, make no requests")
     a = ap.parse_args(argv)
 
@@ -89,7 +91,9 @@ def main(argv=None, deps=None):
         print(f"budget for this run: {budget} model calls in total today (UTC), including what earlier runs already used")
     llm = deps["llm"] if deps else LLM(cfg, CallBudget(conn, budget, cfg["calls"]["per_company_ceiling"]))
     hunter = deps["hunter"] if deps else None
-    result = run_domains(domains, cfg, conn, fetcher, llm, hunter, run_source=(deps or {}).get("run_source", "live"), progress=show_progress)
+    hints = load_hints(a.news) if a.news else None
+    result = run_domains(domains, cfg, conn, fetcher, llm, hunter, run_source=(deps or {}).get("run_source", "live"), progress=show_progress,
+                         hints=hints)
     path = write_output(result, cfg, out_dir=a.out, fmt=a.format)
     s = result["summary"]
     print(f"done: {s['companies']} companies, {s['by_decision']}, avg {s['avg_seconds_per_company']}s each -> {path}")

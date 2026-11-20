@@ -200,5 +200,6 @@ test("proper-noun and number gate: ordinary compliance words pass, invented name
   assert.deepEqual(checkProperNouns("Acmecorp reviews pull engineers off work.", "Ethermed", allowed), ["Acmecorp"]);
   assert.deepEqual(checkProperNouns("Additionally, Ethermed grows.", "Ethermed", allowed), []);
   assert.deepEqual(checkProperNouns("Furthermore, Ethermed grows. However, Acmecorp does not.", "Ethermed", allowed), ["Acmecorp"], "connectives pass, an invented name still fails");
+  assert.deepEqual(checkProperNouns("Tendos's seed round is big. Congrats to the team. Founders move fast.", "Tendos seed", allowed), [], "a name ending in s matches its possessive; ordinary openers pass");
   assert.deepEqual(checkNumbers("Over 500 customers and a 15 minute call", "Series B", config.draft.allowed_numbers), ["500"]);
 });
