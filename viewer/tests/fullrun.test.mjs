@@ -92,6 +92,15 @@ test("no Hunter key: the run still qualifies, and the draft is blocked with a cl
   assert.equal(t.seen.hunter, 0); assert.equal(t.seen.draft, 0);
 });
 
+test("a run that had no draft only because Hunter was unavailable is NOT cached, so adding the key later works", async () => {
+  const t = await setup({ env: { HUNTER_API_KEY: "" } });
+  const first = (await go(t, "acmeledger.com")).body;
+  assert.equal(first.draft.status, "blocked");
+  t.deps.env.HUNTER_API_KEY = "hk";
+  const second = (await go(t, "acmeledger.com")).body;
+  assert.equal(second.from_cache, false); assert.equal(second.draft.status, "drafted"); assert.equal(t.seen.hunter, 1);
+});
+
 test("the web page may only use its slice of the monthly Hunter allowance", async () => {
   const t = await setup({ env: { LIVE_HUNTER_MONTHLY_CAP: "0" } });
   const b = (await go(t, "acmeledger.com")).body;
