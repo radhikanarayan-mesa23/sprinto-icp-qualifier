@@ -9,22 +9,24 @@ const STAGE_FIELD = { funding_stage: "funding_stage", open_roles: "open_roles_co
 const SUFFIXES = ["inc", "llc", "ltd", "corp", "co", "gmbh", "limited", "corporation"];
 const SLD = ["co", "com", "org", "net", "ac", "gov"];
 
-export function certRegexHits(cfg, page) {
+export function certRegexHits(cfg, pages) {
   const hits = [];
-  const blob = `${page.cleaned.footer_signals}\n${page.cleaned.text}`;
-  for (const p of cfg.icp.already_certified.cert_patterns) {
-    const m = new RegExp(p, "i").exec(blob);
-    if (m) hits.push({ cert: m[0], source_url: page.url });
+  for (const page of Array.isArray(pages) ? pages : [pages]) {
+    const blob = `${page.cleaned.footer_signals}\n${page.cleaned.text}`;
+    for (const p of cfg.icp.already_certified.cert_patterns) {
+      const m = new RegExp(p, "i").exec(blob);
+      if (m) hits.push({ cert: m[0], source_url: page.url });
+    }
   }
   return hits;
 }
 
-export function checkEvidence(fields, cfg, page) {
+export function checkEvidence(fields, cfg, pages) {
   const rows = {};
   const notes = [];
   const val = (n) => fields[n].value;
   const certs = val("certifications_found") ?? [];
-  const regex = certRegexHits(cfg, page);
+  const regex = certRegexHits(cfg, pages);
   if (certs.length || regex.length) {
     rows.already_certified = { status: "resolved", outcome: "certified", via: certs.length ? "model" : "regex",
       source_url: fields.certifications_found.source_url ?? regex[0].source_url };

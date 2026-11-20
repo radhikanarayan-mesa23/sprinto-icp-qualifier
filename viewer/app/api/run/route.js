@@ -3,7 +3,7 @@ import config from "../../../lib/generated/config";
 import { runDomain } from "../../../lib/run/core";
 
 export const runtime = "nodejs";
-export const maxDuration = 30; // hard ceiling; the run keeps its own 22 s budget for the model step
+export const maxDuration = 60; // hard ceiling (Hobby limit); pipeline.js stops starting new work well before it
 export const dynamic = "force-dynamic";
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { "cache-control": "no-store" } });

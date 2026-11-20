@@ -38,13 +38,17 @@ npm test                                   # 70 tests: SSRF guard, Python parity
 ### Live "Run a domain" page (`/run`)
 Styled after the Axiom hero (cream graph paper, serif headline, stage card); each scraper stage shows its own copy,
 streamed live as the server finishes it. Palette: light blue, cream, light green, dark blue.
-One homepage, plain fetch only. An open demo: no passcode and no sign-in, and the model key stays on the server. It checks robots.txt, waits, fetches once, cleans, extracts (one
-model call) and runs the code-side evidence check, then saves a labelled **partial** record. It refuses private and
-internal addresses (checked again at connect time and on every redirect), stops at CAPTCHAs, challenges and logins, and
-shares the CLI's daily model-call counter (UTC day), its cache by domain and its Hunter cap. Limits: 3 runs per visitor
-per hour, 20 per hour overall, plus an owner kill switch (`LIVE_RUNS_DISABLED=1`). Server variables are listed in `viewer/.env.example`.
+The same pipeline as the CLI, in JavaScript: homepage, evidence check, a bounded loop over up to 3 more pages (code picks them),
+qualify, Hunter contact search, and a draft behind the provenance gate. Plain fetch only (no browser, so JS-only sites flag as thin).
+It checks robots.txt, waits politely, refuses private and internal addresses (checked again at connect time and on every redirect), stops
+at CAPTCHAs, challenges and logins, and stops starting new work early enough to finish inside Vercel's 60 s limit. It shares the CLI's
+daily model-call counter (UTC day), its cache by domain and its Hunter counter. Limits: 3 runs per visitor per hour, 20 per hour overall,
+the web page may use only `LIVE_HUNTER_MONTHLY_CAP` (default 10) of the 25 monthly Hunter searches, plus an owner kill switch
+(`LIVE_RUNS_DISABLED=1`). **A contact's email is masked** (`m****l@company.com`) in the response, the stored record and the contact
+cache: real emails are personal data and the viewer is public. Drafts are never sent from the web page. Without `HUNTER_API_KEY` a run
+still qualifies, but no contact is found and no draft is written. Server variables are listed in `viewer/.env.example`.
 The JavaScript cleaner and evidence check are ports of the Python ones; `scripts/sync_viewer_config.py` generates
-their settings from `config.yaml` and a golden-output test proves parity on every fixture page.
+their settings, prompts and schemas from `config.yaml` and the Python modules, and a golden-output test proves parity on every fixture page.
 
 ## Reviewing drafts by email
 `scripts/resend_review.py` emails each draft to the reviewer only (never to the prospect) via Resend. See `docs/resend-review.md`.

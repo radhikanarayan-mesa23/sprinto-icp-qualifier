@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { DECISIONS, ROWS, outcome, valueText } from '@/lib/format'
 
 type Tone = 'ok' | 'flag' | 'fail' | 'skip' | 'wait' | 'idle'
-type StageId = 'guards' | 'fetch' | 'clean' | 'extract' | 'evidence'
+type StageId = 'guards' | 'fetch' | 'clean' | 'extract' | 'evidence' | 'qualify' | 'contact' | 'draft'
 type Step = { id: string; label: string; state: 'ok' | 'flag' | 'skip' | 'fail'; detail: string }
 type Line = { k: string; v: string; quote?: string; tone?: Tone }
 type Fact = { label: string; value: string }
@@ -21,7 +21,14 @@ type Stage = { id: StageId; tab: string; question: string; lines: Line[]; facts:
 type Result = {
   ok: true; domain: string; decision: string; defence: string; saved: boolean; from_cache: boolean
   failure: string | null; explanation: string | null; flags: string[]; steps: Step[]
-  rows: { row: string; status: string; outcome: string; field: string | null; value: unknown; source_url: string | null; quote: string | null }[]
+  rows: { row: string; status: string; outcome: string; field: string | null; value: unknown; source_url: string | null; quote: string | null; reason?: string | null }[]
+  rank?: number | null; queue?: string | null
+  pages?: { path: string; status: number; failure: string | null }[]
+  contact?: { first_name: string; last_name: string; title: string; email: string; why_chosen: string } | null
+  draft?: { status: string; failure_reason: string | null; subject: string | null; email: string | null; word_count: number | null
+    hook: { field: string; anchor: string; source_url: string | null; evidence_quote: string | null } | null
+    provenance: { claim: string; field: string; source_url: string | null; evidence_quote: string | null }[]; gate: Record<string, { ok: boolean; detail: string }> } | null
+  pain_points?: { text: string; field: string; source_url: string | null }[]
   fields: { field: string; value: unknown; quote: string | null; source_url: string | null }[]
   fetch: { status: number; bytes: number; redirects: number; truncated: boolean; error: string | null } | null
   cleaned: { words: number; tokens_before: number; tokens_after: number; preview: string; footer: string } | null
@@ -40,9 +47,12 @@ const STAGES: { id: StageId; tab: string; question: string; insight: string }[] 
   { id: 'fetch', tab: 'Fetch', question: 'What does the site let a bot read?', insight: 'robots.txt is read first. A block, a CAPTCHA or a login stops the run: it never tries to get past one.' },
   { id: 'clean', tab: 'Clean', question: 'What is left once the noise is gone?', insight: 'Navigation, footers, cookie banners and scripts are stripped. A page under 200 words is flagged thin, never guessed at.' },
   { id: 'extract', tab: 'Extract', question: 'What can the page actually prove?', insight: 'Every value must quote the page. A quote that is not on the page is thrown away in code, not trusted.' },
-  { id: 'evidence', tab: 'Evidence', question: 'Does it fit the ICP, and why?', insight: 'The hard rules are applied in code. The soft rows only rank, and never qualify a company on their own.' },
+  { id: 'evidence', tab: 'Evidence', question: 'Does it fit the ICP, and why?', insight: 'Missing rows send the agent to the likeliest page (/security, /careers, /pricing). Code picks the page, never the model, and a cap stops it.' },
+  { id: 'qualify', tab: 'Qualify', question: 'Who decides: the model or the code?', insight: 'The model judges what was found. Hard rules are applied in code, and a model "no" without a hard rule is overridden.' },
+  { id: 'contact', tab: 'Contact', question: 'Who should hear about it?', insight: 'Hunter is searched only for companies that qualify, and titles are scored in code. The email is masked on this page.' },
+  { id: 'draft', tab: 'Draft', question: 'Can every claim in the email be traced?', insight: 'Each claim must cite a stored field and a quote from the site. If any check fails the draft is withheld. Nothing is ever sent.' },
 ]
-const STAGE_OF: Record<string, StageId> = { guards: 'guards', cache: 'guards', robots: 'fetch', fetch: 'fetch', clean: 'clean', extract: 'extract', evidence: 'evidence', save: 'evidence' }
+const STAGE_OF: Record<string, StageId> = { guards: 'guards', cache: 'guards', robots: 'fetch', fetch: 'fetch', clean: 'clean', extract: 'extract', evidence: 'evidence', loop: 'evidence', qualify: 'qualify', contact: 'contact', draft: 'draft', save: 'draft' }
 const ROW_LABEL = ROWS as Record<string, { label: string }>
 const DECISION = DECISIONS as Record<string, { label: string }>
 
@@ -86,13 +96,38 @@ const EXAMPLE: Record<StageId, { lines: Line[]; facts: Fact[] }> = {
   },
   evidence: {
     lines: [
-      { k: 'Already certified?', v: 'Not evaluated: only the homepage was read', tone: 'skip' },
+      { k: 'Already certified?', v: 'Unverified: no certification string found', tone: 'skip' },
       { k: 'B2B SaaS?', v: 'Resolved: business', tone: 'ok' },
       { k: 'Right stage?', v: 'Resolved: funding stage', tone: 'ok' },
       { k: 'Compliance pressure?', v: 'Resolved: enterprise customers', tone: 'ok' },
-      { k: 'decision', v: 'Partial run. The command-line agent reads up to 4 more pages, then contacts and drafts.' },
+      { k: 'loop', v: 'Fetch /security → 404, counted against the cap, moving on', tone: 'skip' },
+      { k: 'decision', v: 'Three rows resolved from the pages read; certification unverified and flagged.' },
     ],
-    facts: [{ label: 'Rows resolved', value: '3 of 4' }, { label: 'Decision', value: 'Partial run' }, { label: 'Flags', value: '2' }],
+    facts: [{ label: 'Rows resolved', value: '3 of 4' }, { label: 'Extra pages', value: '1' }, { label: 'Flags', value: '2' }],
+  },
+  qualify: {
+    lines: [
+      { k: 'hard rules', v: 'not certified, B2B: no disqualifier fired in code', tone: 'ok' },
+      { k: 'model', v: 'go, on B2B and a named funding stage', tone: 'ok' },
+      { k: 'rank', v: '1 of 4: stage resolved + compliance tie-break' },
+    ],
+    facts: [{ label: 'Decision', value: 'Go' }, { label: 'Rank', value: '1' }, { label: 'Model calls', value: '2' }],
+  },
+  contact: {
+    lines: [
+      { k: 'search', v: 'Hunter: 10 results for acme.com', tone: 'ok' },
+      { k: 'chosen', v: 'Ria Das, Head of Security (email masked: r***s@acme.com)', tone: 'ok' },
+      { k: 'rejected', v: '9 results: title not preferred, generic address', tone: 'skip' },
+    ],
+    facts: [{ label: 'Hunter this month', value: '3 of 25' }, { label: 'Confidence', value: '94' }],
+  },
+  draft: {
+    lines: [
+      { k: 'hook', v: 'Series B', quote: 'raised a Series B' , tone: 'ok' },
+      { k: 'email', v: '"Hi Ria, I noticed Acme raised a Series B…" 77 words', tone: 'ok' },
+      { k: 'checks', v: '10 of 10 provenance checks passed. Nothing is sent.', tone: 'ok' },
+    ],
+    facts: [{ label: 'Words', value: '77' }, { label: 'Checks', value: '10 / 10' }, { label: 'Sent', value: 'never' }],
   },
 }
 
@@ -148,11 +183,46 @@ function liveStages(steps: Step[], r: Result | null, running: boolean): Stage[] 
     }
     if (def.id === 'evidence' && r) {
       r.rows.forEach(x => lines.push({ k: ROW_LABEL[x.row]?.label ?? x.row, v: `${outcome(x.outcome).label}${x.field ? `: ${valueText(x.value) ?? ''}` : ''}`, quote: x.quote ?? undefined, tone: x.status === 'resolved' ? 'ok' : 'skip' }))
-      lines.push({ k: 'decision', v: `${DECISION[r.decision]?.label ?? r.decision}. ${r.defence}` })
       const resolved = r.rows.filter(x => x.status === 'resolved').length
       if (r.rows.length) facts.push({ label: 'Rows resolved', value: `${resolved} of 4` })
-      facts.push({ label: 'Decision', value: DECISION[r.decision]?.label ?? r.decision }, { label: 'Flags', value: String(r.flags.length) })
-      insight = r.saved ? 'Saved as a labelled partial record. Open it for the full evidence trail.' : 'Not saved: this outcome should be retried or is never stored.'
+      if (r.pages) facts.push({ label: 'Pages read', value: String(r.pages.filter(p => !p.failure).length) })
+      facts.push({ label: 'Flags', value: String(r.flags.length) })
+      if (!r.saved) insight = 'Not saved: this outcome should be retried or is never stored.'
+    }
+    if (def.id === 'qualify' && r && (mine.length || r.from_cache)) {
+      lines.push({ k: 'decision', v: `${DECISION[r.decision]?.label ?? r.decision}. ${clip(r.defence, 260)}` })
+      r.rows.filter(x => x.reason).forEach(x => lines.push({ k: ROW_LABEL[x.row]?.label ?? x.row, v: clip(x.reason ?? '', 170), tone: x.status === 'resolved' ? 'ok' : 'skip' }))
+      facts.push({ label: 'Decision', value: DECISION[r.decision]?.label ?? r.decision })
+      if (r.rank) facts.push({ label: 'Rank', value: `${r.rank} of 4` })
+      facts.push({ label: 'Model calls', value: String(r.model.calls) })
+    }
+    if (def.id === 'contact' && r && (mine.length || r.from_cache)) {
+      if (r.contact) {
+        lines.push({ k: 'why', v: clip(r.contact.why_chosen, 220) })
+        facts.push({ label: 'Name', value: `${r.contact.first_name} ${r.contact.last_name}` }, { label: 'Title', value: r.contact.title }, { label: 'Email', value: r.contact.email })
+      }
+      facts.push({ label: 'Hunter this month', value: `${r.guards.hunter_used} of ${r.guards.hunter_cap}` })
+    }
+    if (def.id === 'draft' && r && (mine.length || r.from_cache)) {
+      const d = r.draft
+      if (d?.status === 'drafted' && d.email) {
+        if (d.hook) lines.push({ k: 'hook', v: d.hook.field.replaceAll('_', ' '), quote: d.hook.anchor, tone: 'ok' })
+        lines.push({ k: 'email', v: clip(d.email.replace(/\s+/g, ' '), 260), tone: 'ok' })
+        d.provenance.slice(0, 3).forEach(p => lines.push({ k: 'sourced', v: clip(p.claim, 120), quote: p.evidence_quote ? clip(p.evidence_quote, 80) : undefined, tone: 'ok' }))
+      }
+      if (d && Object.keys(d.gate).length) {
+        const failed = Object.entries(d.gate).filter(([, g]) => !g.ok)
+        lines.push({ k: 'checks', v: failed.length ? `Failed: ${failed.map(([k]) => k.replaceAll('_', ' ')).join('; ')}` : `${Object.keys(d.gate).length} of ${Object.keys(d.gate).length} provenance checks passed`, tone: failed.length ? 'flag' : 'ok' })
+        facts.push({ label: 'Checks', value: `${Object.values(d.gate).filter(g => g.ok).length} / ${Object.keys(d.gate).length}` })
+      }
+      if (d?.word_count) facts.push({ label: 'Words', value: String(d.word_count) })
+      facts.push({ label: 'Sent', value: 'never' })
+      insight = r.saved ? 'Saved with its evidence trail. Open the full record to review it. Nothing was sent.' : insight
+    }
+    // a stage the run never reached (partial run, or a company that did not qualify) says so instead of looking empty
+    if (r && !r.from_cache && ['qualify', 'contact', 'draft'].includes(def.id) && !mine.length) {
+      lines.push({ k: 'not run', v: r.decision === 'partial' ? 'The run stopped before this stage. See the Extract stage for why.' : 'Skipped: this outcome gets no contact lookup and no draft.', tone: 'skip' })
+      state = 'skip'
     }
     return { ...def, lines, facts, insight, state }
   })
@@ -310,7 +380,7 @@ export default function ScraperHero({ config }: { config: ScraperConfig }) {
       } else if (m.type === 'done') {
         finished = true
         if (m.status !== 200 || !m.body.ok) { setError(m.body?.error?.message ?? 'The run failed.'); setPhase('error'); input.current?.focus(); return }
-        setResult(m.body); setSteps(m.body.steps); setPhase('done'); setActive(4)
+        setResult(m.body); setSteps(m.body.steps); setPhase('done'); setActive(m.body.draft?.status === 'drafted' ? 7 : 4)
       }
     }
     for (;;) {
@@ -352,7 +422,7 @@ export default function ScraperHero({ config }: { config: ScraperConfig }) {
                 </span>
               </h1>
               <p className='axm-sub axm-rise' style={at(0.1)}>
-                Give it one company domain and watch the scraper work, stage by stage: what the site allows, what is left once the noise is gone, what the page can prove, and whether it fits.
+                Give it one company domain and watch the full run, stage by stage: what the site allows, what the pages can prove, whether it fits, who to write to, and an email where every claim has a source.
               </p>
 
               <form className='axm-form axm-rise' style={at(0.2)} onSubmit={run} noValidate>
@@ -365,9 +435,9 @@ export default function ScraperHero({ config }: { config: ScraperConfig }) {
                 </button>
               </form>
               <p id='axm-note' className='axm-note axm-rise' style={at(0.26)}>
-                <b>Open demo, no sign-in.</b> Plain fetch only · one homepage · up to 25 s · {config.perVisitor} runs per visitor per hour.
+                <b>Open demo, no sign-in.</b> Plain fetch (no browser) · homepage plus up to 3 more pages · up to about 50 s · {config.perVisitor} runs per visitor per hour · drafts are never sent.
                 {config.disabled ? ' Live runs are switched off by the site owner right now.' : ''}
-                {!config.disabled && !config.modelReady ? ` No model key or daily budget is set on the server yet, so runs fetch and clean but skip extraction.` : ''}
+                {!config.disabled && !config.modelReady ? ` No model key or daily budget is set on the server yet, so runs fetch and clean but stop before extraction.` : ''}
               </p>
 
               <div aria-live='polite' role='status' className='w-full'>
@@ -380,6 +450,15 @@ export default function ScraperHero({ config }: { config: ScraperConfig }) {
                       {result.saved ? <Link className='axm-link' href={result.record_path}>Open the full record</Link> : null}
                     </div>
                     <span className='why'>{result.failure ? 'Flagged, not guessed: ' : ''}{clip(result.failure ? result.explanation ?? result.defence : result.defence, 200)}</span>
+                    {result.draft?.status === 'drafted' && result.draft.email ? (
+                      <div className='axm-draft'>
+                        <p className='meta'>
+                          Draft for {result.contact ? `${result.contact.first_name} ${result.contact.last_name}, ${result.contact.title} (${result.contact.email})` : 'the contact'}. Not sent. Every claim below has a source in the stored record.
+                        </p>
+                        <p className='subj'>Subject: {result.draft.subject}</p>
+                        <pre>{result.draft.email}</pre>
+                      </div>
+                    ) : result.contact && result.draft ? <p className='why'>Contact found ({result.contact.first_name} {result.contact.last_name}, {result.contact.title}), but no draft: {result.draft.failure_reason ?? result.draft.status}.</p> : null}
                   </div>
                 ) : null}
               </div>
@@ -443,7 +522,7 @@ export default function ScraperHero({ config }: { config: ScraperConfig }) {
                 </div>
                 {phase === 'done' && result ? (
                   <p className='axm-spend'>
-                    {result.model.calls} model call{result.model.calls === 1 ? '' : 's'} this run · shared daily budget {result.guards.budget_limit == null ? 'not set' : `${result.guards.budget_used} of ${result.guards.budget_limit}`} · Hunter is not used by live runs · took {result.elapsed_seconds.toFixed(1)}&nbsp;s.
+                    {result.model.calls} model call{result.model.calls === 1 ? '' : 's'} this run · shared daily budget {result.guards.budget_limit == null ? 'not set' : `${result.guards.budget_used} of ${result.guards.budget_limit}`} · Hunter {result.guards.hunter_used} of {result.guards.hunter_cap} this month · took {result.elapsed_seconds.toFixed(1)}&nbsp;s.
                     {result.flags.length ? ` Flags: ${result.flags.join(', ')}.` : ''}
                   </p>
                 ) : null}

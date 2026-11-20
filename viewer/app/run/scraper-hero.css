@@ -88,6 +88,10 @@
 .axm-pill.manual_review { background: color-mix(in srgb, var(--blue-light) 38%, var(--cream)); color: var(--ink); }
 .axm-pill.no_go { background: var(--blue-dark); color: var(--cream); }
 .axm-pill.partial { background: color-mix(in srgb, var(--blue-dark) 9%, var(--cream)); color: var(--ink); box-shadow: inset 0 0 0 1px var(--border); }
+.axm-draft { width: 100%; max-width: 40rem; margin-top: 10px; padding: 14px 18px; text-align: left; border-radius: 14px; background: color-mix(in srgb, var(--green) 22%, var(--cream)); box-shadow: inset 0 0 0 1px var(--border); }
+.axm-draft .meta { margin: 0 0 6px; font-size: 12.5px; color: var(--muted); }
+.axm-draft .subj { margin: 0 0 8px; font-size: 13.5px; font-weight: 600; }
+.axm-draft pre { margin: 0; white-space: pre-wrap; font-family: var(--axm-mono); font-size: 13px; line-height: 1.55; color: var(--ink); }
 .axm-link { font-size: 14px; font-weight: 500; color: var(--blue-dark); text-decoration: underline; text-underline-offset: 3px; }
 
 /* The card: rises from the bottom edge and holds the stages */

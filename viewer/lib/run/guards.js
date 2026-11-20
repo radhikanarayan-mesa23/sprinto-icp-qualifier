@@ -44,6 +44,7 @@ export async function freshRecord(db, domain, cacheDays, now = new Date()) {
   const rows = await db.query("SELECT * FROM companies WHERE domain = $1 AND run_source = 'live'", [domain]);
   const rec = rows[0];
   if (!rec?.fetched_at) return null;
+  if (rec.stop_reason === "live_homepage_only") return null; // an old homepage-only partial run: run the full pipeline instead
   if (now - new Date(rec.fetched_at) > cacheDays * 86400000) return null;
   const fr = String(rec.failure_reason ?? "");
   if (RETRY_NEXT_RUN.some((p) => fr.startsWith(p))) return null;

@@ -1,51 +1,21 @@
-// The live run: ONE homepage, plain fetch only. guards -> robots -> fetch -> clean -> extract -> evidence -> save.
-// It never runs Playwright, never follows a link, never contacts Hunter, never drafts. A flag (thin page, block,
-// wrong company) is a correct outcome and is saved and shown as one. Pure function of its dependencies, so it is
-// fully testable offline.
+// The live run. guards -> robots -> fetch homepage -> clean -> extract, then the SAME pipeline the command line runs
+// (pipeline.js): evidence -> bounded loop over more pages -> qualify -> contact -> draft -> save. Plain fetch only (no browser).
+// A flag (thin page, block, wrong company) is a correct outcome and is saved and shown as one. If extraction cannot run
+// (no key, budget spent, empty page) the run stops there and is saved as an honest, labelled partial run. Nothing is ever sent.
+// Pure function of its dependencies, so it is fully testable offline.
 import { cleanHtml } from "./clean.js";
-import { buildReasons, checkEvidence, identityOk } from "./evidence.js";
 import { ExtractSkipped, extractFields } from "./extract.js";
+import { LOGIN, explain, failureOf } from "./page.js";
+import { runPipeline } from "./pipeline.js";
 import { RUN_LIMITS, count, freshRecord, hit, hunterUsedThisMonth, spendCall, usedToday, utcDay, utcHour,
   visitorKey } from "./guards.js";
 import { safeFetch, validateDomain } from "./net.js";
-import { checkRobots } from "./robots.js";
+import { loadRobots } from "./robots.js";
 import { emptyDraft, saveRecord } from "./record.js";
 
-const CHALLENGE = /just a moment\.\.\.|cf-chl|attention required.{0,40}cloudflare|checking your browser/i;
-const CAPTCHA = /g-recaptcha|h-captcha|hcaptcha|captcha-container|are you a robot|verify you are human/i;
-const LOGIN = /type=["']password["']|sign in to continue|log in to continue|please (log|sign) in/i;
 const TRANSIENT = (r) => r === "timeout" || r.startsWith("network:") || r.startsWith("transient_");
 // never stored: temporary problems (retry later) and refused addresses (a visitor must not be able to plant records)
 const NOT_STORED = (r) => TRANSIENT(r) || ["blocked_address", "not_https", "bad_url"].includes(r);
-const MESSAGES = {
-  robots_disallowed: "robots.txt asks bots not to fetch this page, so the agent did not.",
-  not_found_404: "The homepage returned 404.",
-  captcha: "A CAPTCHA is in the way. The agent stops at barriers and never tries to get past them.",
-  cloudflare_challenge: "A bot-protection challenge is in the way. The agent stops there and does not try to bypass it.",
-  login_wall: "The page is behind a login. The agent never logs in.",
-  blocked_address: "That address resolves to a private or internal network, which is not allowed.",
-  redirect_off_domain: "The site redirects to a different domain, so the agent stopped rather than guess which company this is.",
-  not_html: "The homepage is not an HTML page.",
-  too_many_redirects: "The homepage redirected too many times.",
-  timeout: "The site did not answer in time. Try again later.",
-};
-
-const failureOf = (page) => {
-  if (page.error) return page.error;
-  if (page.status === 404 || page.status === 410) return "not_found_404";
-  if ([401, 403].includes(page.status)) return `blocked_${page.status}`;
-  if (page.status === 429 || page.status >= 500) return `transient_${page.status}`;
-  if (page.status >= 400) return `http_${page.status}`;
-  if (CHALLENGE.test(page.text.slice(0, 6000))) return "cloudflare_challenge";
-  if (CAPTCHA.test(page.text)) return "captcha";
-  return null;
-};
-const explain = (reason) => MESSAGES[reason] ??
-  (reason.startsWith("blocked_") ? `The site refused the request (HTTP ${reason.slice(8)}), usually bot protection. The agent stops at the block and does not try to get past it.`
-  : reason.startsWith("transient_") ? `The site had a temporary problem (HTTP ${reason.slice(10)}). Try again later.`
-  : reason.startsWith("network:") ? "The site could not be reached. Try again later."
-  : reason);
-
 // The model key lives in the variable named by config (OPENROUTER_API_KEY). Fallback: a key saved under GEMINI_API_KEY,
 // because Vercel locks a variable's name after saving. The key is only ever sent in a header to the configured endpoint.
 export function modelKey(env, cfg) {
@@ -64,7 +34,7 @@ const reply = (status, code, message, extra = {}) => ({ status, body: { ok: fals
 
 export async function runDomain({ domain: rawDomain, ip }, deps) {
   const { db, env, limits = RUN_LIMITS, fetchFn = safeFetch, geminiFetch = fetch, now = () => new Date(),
-    sleep = (ms) => new Promise((r) => setTimeout(r, ms)), urlFor = (d) => `https://${d}/`, netOpts = {}, onStep } = deps;
+    sleep = (ms) => new Promise((r) => setTimeout(r, ms)), urlFor = (d, path = "/") => `https://${d}${path}`, netOpts = {}, onStep } = deps;
   const cfg = applyPreset(deps.cfg, env.MODEL_PRESET);
   const t0 = Date.now();
   const steps = [];
@@ -108,7 +78,7 @@ export async function runDomain({ domain: rawDomain, ip }, deps) {
 
   // ---- 2. robots.txt, then a polite pause, then the one page
   const url = urlFor(domain);
-  const robots = await checkRobots(domain, url, { fetchFn, userAgent: cfg.user_agent, ...netOpts });
+  const robots = await loadRobots(domain, url, { fetchFn, userAgent: cfg.user_agent, ...netOpts });
   step("robots", "robots.txt", robots.allowed ? "ok" : "fail", robots.note);
   if (!robots.allowed) return fail("robots_disallowed");
   await sleep(cfg.request_delay_seconds * 1000);
@@ -141,6 +111,7 @@ export async function runDomain({ domain: rawDomain, ip }, deps) {
   const pageForModel = { url: pageRow.url, cleaned };
   let usage = { calls: 0, prompt_tokens: 0, output_tokens: 0 };
   let fields = null;
+  let firstFlags = [];
   let extractNote = null;
   const budget = Number.parseInt(env.LIVE_DAILY_CALL_BUDGET ?? "", 10);
   if (cleaned.words === 0) {
@@ -158,6 +129,7 @@ export async function runDomain({ domain: rawDomain, ip }, deps) {
         timeoutMs: Math.max(5000, Math.min(14000, 27000 - (Date.now() - t0))) }); // always finishes inside the 30 s function limit
       fields = out.fields;
       usage = out.usage;
+      firstFlags = out.flags;
       flags.push(...out.flags);
       step("extract", "Extract", "ok", `${usage.calls} model call${usage.calls > 1 ? "s" : ""}, ${usage.prompt_tokens} to ${usage.output_tokens} tokens. Every value is checked against the page text in code.`);
     } catch (e) {
@@ -172,39 +144,19 @@ export async function runDomain({ domain: rawDomain, ip }, deps) {
     }
   }
 
-  // ---- 5. evidence check, identity match and the decision (all code)
-  let decision = "partial";
-  let rows = null;
-  let reasons = [];
-  let shortCircuit = null;
-  let defence;
+  // ---- 5. the rest of the pipeline (evidence, more pages, qualify, contact, draft) when extraction produced fields
   if (fields) {
-    const ev = checkEvidence(fields, cfg, pageForModel);
-    flags.push(...ev.notes);
-    const ident = identityOk(domain, fields.company_name.value, cleaned.text);
-    const outcomes = Object.fromEntries(Object.entries(ev.rows).map(([r, x]) => [r, x.status === "resolved" ? "resolved" : "not_evaluated:live_homepage_only"]));
-    rows = Object.fromEntries(Object.entries(ev.rows).map(([r, x]) => [r, { ...x, outcome: outcomes[r] }]));
-    reasons = buildReasons(fields, ev.rows, outcomes);
-    const resolved = Object.values(ev.rows).filter((x) => x.status === "resolved").length;
-    if (ident === false) {
-      decision = "manual_review";
-      flags.push(`identity_mismatch:${fields.company_name.value}`);
-      defence = `The page names '${fields.company_name.value}', which does not match ${domain}. It may be the wrong company, so a human decides.`;
-    } else if (ev.rows.already_certified.status === "resolved") {
-      decision = "no_go"; shortCircuit = "short_circuit:already_certified";
-      defence = `Disqualified by a hard rule applied in code: already certified. ${reasons.find((r) => r.row === "already_certified").reason}`;
-    } else if (ev.rows.b2b_saas.status === "resolved" && ev.rows.b2b_saas.buyer_type === "consumer") {
-      decision = "no_go"; shortCircuit = "short_circuit:not_b2b_saas";
-      defence = `Disqualified by a hard rule applied in code: not a B2B SaaS company. ${reasons.find((r) => r.row === "b2b_saas").reason}`;
-    } else {
-      defence = `Live run on the homepage only: ${resolved} of 4 ICP rows resolved from that page. The command-line agent would fetch up to 4 more pages, then qualify, find a contact and draft.`;
-    }
-    if (ident === null) flags.push("identity_unverified:no_company_name_extracted");
-    step("evidence", "Evidence check", "ok", `${resolved} of 4 rows resolved from the homepage${shortCircuit ? `. Hard rule applied: ${shortCircuit.split(":")[1].replaceAll("_", " ")}` : ""}${ident === false ? ". Company name does not match the domain: sent to a human" : ""}`);
-  } else {
-    defence = `Live run on the homepage only. The page was fetched and cleaned. Extraction did not run (${(extractNote ?? "no fields were extracted").replace(/^(Skipped|Refused): /, "").replace(/\.$/, "")}). Nothing was guessed.`;
-    step("evidence", "Evidence check", "skip", "Needs extracted fields, so no row was evaluated.");
+    const out = await runPipeline({ domain, cfg, env, db, day, budget, apiKey: modelKey(env, cfg), geminiFetch, fetchFn, urlFor, netOpts, sleep, now, step, t0,
+      robots, home: { row: pageRow, cleaned }, first: { fields, usage, flags: firstFlags }, hunterFetch: deps.hunterFetch });
+    await saveRecord(db, out.rec);
+    step("save", "Save", "ok", out.drec.status === "drafted" ? "Saved the full record with its draft. Nothing was sent." : "Saved the full record. Open it to see the evidence trail.");
+    return { status: 200, body: await view(db, out.rec, { cfg, fetchInfo, steps, visitor, hour, day, env, limits, saved: true, elapsed: (Date.now() - t0) / 1000,
+      cleaned: { words: cleaned.words, tokens_before: cleaned.tokens_before, tokens_after: cleaned.tokens_after, preview: cleaned.text.slice(0, 1200), footer: cleaned.footer_signals }, extractNote }) };
   }
+  const decision = "partial";
+  const defence = `Live run on the homepage only. The page was fetched and cleaned. Extraction did not run (${(extractNote ?? "no fields were extracted").replace(/^(Skipped|Refused): /, "").replace(/\.$/, "")}). Nothing was guessed.`;
+  step("evidence", "Evidence check", "skip", "Needs extracted fields, so no row was evaluated.");
+  const rows = null, reasons = [], shortCircuit = null;
 
   const rec = baseRecord(domain, now, t0, {
     decision, defence, flags: [...new Set(flags)], pages_fetched: [pageRow], extracted_fields: fields, icp_rows: rows, reasons,
@@ -244,7 +196,13 @@ async function view(db, rec, o) {
   return {
     ok: true, from_cache: !!o.fromCache, domain: rec.domain, decision: rec.decision, defence: rec.defence, saved: o.saved,
     failure: o.failure ?? rec.failure_reason ?? null, explanation: o.explanation ?? null, flags: rec.flags ?? [], steps: o.steps,
-    rows: (rec.reasons ?? []).map((r) => ({ row: r.row, status: r.status, outcome: r.outcome, field: r.field, value: r.value, source_url: r.source_url, quote: r.evidence_quote })),
+    rows: (rec.reasons ?? []).map((r) => ({ row: r.row, status: r.status, outcome: r.outcome, field: r.field, value: r.value, source_url: r.source_url, quote: r.evidence_quote, reason: r.reason ?? null, verdict: r.verdict ?? null })),
+    rank: rec.rank ?? null, rank_basis: rec.rank_basis ?? null, queue: rec.queue ?? null, stop_reason: rec.stop_reason ?? null,
+    pages: (rec.pages_fetched ?? []).map((p) => ({ path: p.path, status: p.status, failure: p.failure_reason ?? null })),
+    contact: rec.contact ? { first_name: rec.contact.first_name, last_name: rec.contact.last_name, title: rec.contact.title, email: rec.contact.email, why_chosen: rec.contact.why_chosen } : null,
+    draft: rec.draft ? { status: rec.draft.status, failure_reason: rec.draft.failure_reason ?? null, subject: rec.draft.subject ?? null,
+      email: rec.draft.email ?? null, word_count: rec.draft.word_count ?? null, hook: rec.draft.hook ?? null, provenance: rec.draft.provenance ?? [], gate: rec.draft.gate ?? {} } : null,
+    pain_points: rec.pain_points ?? [],
     cleaned: o.cleaned ?? null, extract_note: o.extractNote ?? null,
     model: { calls: rec.model_calls, prompt_tokens: rec.prompt_tokens, output_tokens: rec.output_tokens, key_configured: !!modelKey(o.env, o.cfg) },
     guards: { visitor_runs_used: mine, visitor_runs_limit: o.limits.perVisitorPerHour, budget_used: used, budget_limit: Number.isFinite(budget) ? budget : null,
