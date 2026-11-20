@@ -43,7 +43,20 @@ export default {
       "CISO",
       "SSO",
       "PCI",
-      "DSS"
+      "DSS",
+      "Compliance",
+      "Security",
+      "Audit",
+      "Audits",
+      "Evidence",
+      "Controls",
+      "Questionnaires",
+      "Frameworks",
+      "Certification",
+      "Certifications",
+      "Vendor",
+      "Customers",
+      "Enterprise"
     ],
     "hook_fields": [
       "compliance_pressure_signal",
@@ -120,6 +133,9 @@ export default {
         "patterns": [
           "vp engineering",
           "vp of engineering",
+          "vp, engineering",
+          "vice president of engineering",
+          "vice president, engineering",
           "head of engineering",
           "director of engineering"
         ],
@@ -135,9 +151,7 @@ export default {
         "SOC ?2",
         "ISO ?/?IEC ?27001",
         "ISO ?27001",
-        "HIPAA",
-        "PCI[- ]?DSS",
-        "GDPR compliant"
+        "PCI[- ]?DSS"
       ],
       "fetch_limit": 1,
       "hard": false,

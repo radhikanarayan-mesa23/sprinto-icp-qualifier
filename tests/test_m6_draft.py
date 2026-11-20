@@ -278,3 +278,13 @@ def test_ordinary_industry_terms_are_not_invented_names(cfg):
     terms = cfg["draft"]["allowed_terms"]
     assert check_proper_nouns("Many B2B SaaS teams need SOC 2 for their API and SSO.", "Dub", terms) == []
     assert check_proper_nouns("Many Globex teams need it.", "Dub", terms) == ["Globex"]
+
+
+def test_prompt_names_the_only_allowed_hook_fields(pipe, cfg):
+    """[high] The model must be told which fields may be the hook, so it cannot hook on product_description."""
+    st, q, c, llm, fake = pipe("acmeledger.test")
+    cands = hook_candidates(st["fields"], cfg)
+    prompt = build_prompt(st, c["contact"], cands)
+    assert prompt.startswith("Draft the outreach email.")
+    assert "hook.field MUST be exactly one of: " + ", ".join(f'"{n}"' for n, _ in cands) in prompt
+    assert "product_description" in prompt.split("MUST be exactly one of:")[1] and "rejected" in prompt

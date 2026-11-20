@@ -252,3 +252,13 @@ def test_budget_adds_this_runs_allowance_on_top_of_what_is_already_used(cfg):
     assert compute_daily_call_budget(cfg, 2, already_used=30) == 49
     cfg["calls"]["daily_cap"] = 40
     assert compute_daily_call_budget(cfg, 2, already_used=30) == 40, "the daily cap bounds the total"
+
+
+def test_hipaa_and_gdpr_claims_are_not_a_certification_but_soc2_still_is(cfg):
+    """A startup saying 'HIPAA-compliant infrastructure' is a buying signal, not an already-certified disqualifier."""
+    from types import SimpleNamespace
+    from icp.evidence import cert_regex_hits
+    page = lambda t: [("https://x.test/", SimpleNamespace(footer_signals="", text=t))]
+    assert cert_regex_hits(cfg, page("HIPAA-compliant infrastructure with audit-ready documentation. GDPR compliant.")) == []
+    assert [h["cert"] for h in cert_regex_hits(cfg, page("We are SOC 2 Type II certified"))] == ["SOC 2"]
+    assert cert_regex_hits(cfg, page("ISO 27001 and PCI DSS attested"))

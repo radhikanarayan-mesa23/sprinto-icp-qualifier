@@ -85,7 +85,10 @@ def build_prompt(state, contact, cands):
                            and n != "company_name"],
            "flags": state["flags"]}
     txt = json.dumps(rec, indent=1).replace("<<<", "").replace(">>>", "")
-    return "Draft the outreach email.\n\n<<<RECORD>>>\n" + txt + "\n<<<END RECORD>>>"
+    allowed = ", ".join(f'"{n}"' for n, _ in cands)
+    rule = (f"\n\nhook.field MUST be exactly one of: {allowed}. Any other field (for example product_description or "
+            "company_name) is rejected. other_facts may support pain points and claims but can never be the hook.")
+    return "Draft the outreach email.\n\n<<<RECORD>>>\n" + txt + "\n<<<END RECORD>>>" + rule
 
 
 def _corpus(state, contact):

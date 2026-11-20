@@ -158,3 +158,19 @@ def test_transient_retry_then_success(make_fetcher):
     f.session.get = flaky
     r = f.fetch_page("acmeledger.test", "/careers")
     assert r.failure_reason is None and state["n"] == 2
+
+
+def test_vice_president_of_engineering_is_an_accepted_contact_title(cfg):
+    """Hunter titles are free text: 'Vice President of Engineering' must score like 'VP of Engineering'."""
+    from icp.contact import score_candidate
+    for t in ["Vice President of Engineering", "VP, Engineering", "VP of Engineering"]:
+        sc, tier = score_candidate({"position": t, "seniority": "executive"}, cfg, True)
+        assert tier == "engineering_leader", t
+    assert score_candidate({"position": "Software Engineer", "seniority": "junior"}, cfg, True)[1] is None
+
+
+def test_sentence_opening_compliance_vocabulary_passes_but_an_invented_name_still_fails(cfg):
+    from icp.draft import check_proper_nouns
+    allowed = cfg["draft"]["allowed_terms"]
+    assert check_proper_nouns("Compliance reviews can pull engineers off product work.", "Ethermed prior authorization", allowed) == []
+    assert check_proper_nouns("Acmecorp reviews can pull engineers off product work.", "Ethermed prior authorization", allowed) == ["Acmecorp"]

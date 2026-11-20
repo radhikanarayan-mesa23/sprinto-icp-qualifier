@@ -63,7 +63,8 @@ hunter:
     - {name: founder, score: 75, small_boost: 30, patterns: ["founder", "co-founder", "cofounder"]}
     - {name: ceo, score: 55, small_boost: 15, patterns: ["ceo", "chief executive"]}
     - {name: engineering_leader, score: 50, small_boost: 0,
-       patterns: ["vp engineering", "vp of engineering", "head of engineering", "director of engineering"]}
+       patterns: ["vp engineering", "vp of engineering", "vp, engineering", "vice president of engineering", "vice president, engineering",
+                  "head of engineering", "director of engineering"]}
 
 fetch_cap_beyond_homepage: 4    # ceiling, not a target
 
@@ -75,7 +76,9 @@ icp:
     pages: ["/", "/security", "/trust"]
     fetch_limit: 1
     if_unanswered: "treat_as_not_certified_flag"
-    cert_patterns: ["SOC ?2", "ISO ?/?IEC ?27001", "ISO ?27001", "HIPAA", "PCI[- ]?DSS", "GDPR compliant"]
+    # Attestations that a third party issues. "HIPAA" and "GDPR compliant" are deliberately NOT here: they are legal
+    # requirements a company claims, not certificates it holds, and a healthcare or EU startup saying so is a buying signal.
+    cert_patterns: ["SOC ?2", "ISO ?/?IEC ?27001", "ISO ?27001", "PCI[- ]?DSS"]
   b2b_saas:
     hard: true
     short_circuit: {when: "not_b2b_saas", action: "disqualify"}
@@ -118,7 +121,10 @@ draft:
   # Hooks must be company-specific. product_description and company_name are too generic to hook on.
   hook_fields: ["compliance_pressure_signal", "funding_stage", "enterprise_signal", "open_roles_count"]
   allowed_terms: ["Sprinto", "SOC", "ISO", "GDPR", "HIPAA", "Type", "II", "Hi", "Best", "B2B", "B2C", "SaaS", "API", "AI", "IT",
-                  "CEO", "CTO", "CISO", "SSO", "PCI", "DSS"]   # ordinary industry terms, not names
+                  "CEO", "CTO", "CISO", "SSO", "PCI", "DSS",
+                  # compliance vocabulary a draft opens sentences with; common nouns, never a company or person
+                  "Compliance", "Security", "Audit", "Audits", "Evidence", "Controls", "Questionnaires", "Frameworks",
+                  "Certification", "Certifications", "Vendor", "Customers", "Enterprise"]   # ordinary terms, not names
   allowed_numbers: ["2", "15", "27001"]   # SOC 2, a 15-minute call, ISO 27001
 
 # Run-level targets from the pre-build decisions (logged, never enforced)

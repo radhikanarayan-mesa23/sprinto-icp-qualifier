@@ -86,8 +86,13 @@ class Fetcher:
             with sync_playwright() as p:
                 b = p.chromium.launch()
                 pg = b.new_page(user_agent=self.cfg["user_agent"])
-                pg.goto(url, timeout=self.cfg["request_timeout_seconds"] * 1000)
-                pg.wait_for_load_state("networkidle")
+                # Pages that poll or stream never reach "networkidle", so waiting for it times out and returns nothing.
+                # Load the document, give scripts a bounded moment to render, then take what is on screen.
+                pg.goto(url, timeout=self.cfg["request_timeout_seconds"] * 1000, wait_until="domcontentloaded")
+                try:
+                    pg.wait_for_load_state("networkidle", timeout=8000)
+                except Exception:  # noqa: BLE001  still usable: read whatever has rendered
+                    pg.wait_for_timeout(2000)
                 html = pg.content()
                 b.close()
                 return html
