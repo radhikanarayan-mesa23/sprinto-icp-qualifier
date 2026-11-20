@@ -124,7 +124,11 @@ draft:
                   "CEO", "CTO", "CISO", "SSO", "PCI", "DSS",
                   # compliance vocabulary a draft opens sentences with; common nouns, never a company or person
                   "Compliance", "Security", "Audit", "Audits", "Evidence", "Controls", "Questionnaires", "Frameworks",
-                  "Certification", "Certifications", "Vendor", "Customers", "Enterprise"]   # ordinary terms, not names
+                  "Certification", "Certifications", "Vendor", "Customers", "Enterprise",
+                  # sentence-opening connectives and time words; ordinary prose, never a name
+                  "Furthermore", "Moreover", "However", "Therefore", "Meanwhile", "Instead", "Besides", "Overall", "Today",
+                  "Often", "Typically", "Especially", "Similarly", "Consequently", "Plus", "Still", "Otherwise", "Likewise",
+                  "Thus", "Hence", "Indeed", "Notably", "Specifically"]   # ordinary terms, not names
   allowed_numbers: ["2", "15", "27001"]   # SOC 2, a 15-minute call, ISO 27001
 
 # Run-level targets from the pre-build decisions (logged, never enforced)

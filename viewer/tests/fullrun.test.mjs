@@ -101,6 +101,15 @@ test("a run that had no draft only because Hunter was unavailable is NOT cached,
   assert.equal(second.from_cache, false); assert.equal(second.draft.status, "drafted"); assert.equal(t.seen.hunter, 1);
 });
 
+test("a rejected draft is not cached: the next run tries again (and does not search Hunter twice)", async () => {
+  const t = await setup({ draftFn: (o) => ({ ...o, body: o.body.replace("Sprinto automates", "Stripe automates") }) });
+  assert.equal((await go(t, "acmeledger.com")).body.draft.status, "failed_provenance");
+  t.deps.geminiFetch = make().deps.geminiFetch; t.seen.hunter = 0;
+  const again = (await go(t, "acmeledger.com")).body;
+  assert.equal(again.from_cache, false); assert.equal(again.draft.status, "drafted");
+  assert.equal((await t.db.query("SELECT n FROM hunter_usage"))[0].n, 1, "the contact came from the cache, so Hunter was searched once in total");
+});
+
 test("the web page may only use its slice of the monthly Hunter allowance", async () => {
   const t = await setup({ env: { LIVE_HUNTER_MONTHLY_CAP: "0" } });
   const b = (await go(t, "acmeledger.com")).body;
@@ -190,5 +199,6 @@ test("proper-noun and number gate: ordinary compliance words pass, invented name
   assert.deepEqual(checkProperNouns("Compliance reviews can pull engineers off product work.", "Ethermed prior authorization", allowed), []);
   assert.deepEqual(checkProperNouns("Acmecorp reviews pull engineers off work.", "Ethermed", allowed), ["Acmecorp"]);
   assert.deepEqual(checkProperNouns("Additionally, Ethermed grows.", "Ethermed", allowed), []);
+  assert.deepEqual(checkProperNouns("Furthermore, Ethermed grows. However, Acmecorp does not.", "Ethermed", allowed), ["Acmecorp"], "connectives pass, an invented name still fails");
   assert.deepEqual(checkNumbers("Over 500 customers and a 15 minute call", "Series B", config.draft.allowed_numbers), ["500"]);
 });

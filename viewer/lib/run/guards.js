@@ -45,6 +45,9 @@ export async function freshRecord(db, domain, cacheDays, now = new Date()) {
   const rec = rows[0];
   if (!rec?.fetched_at) return null;
   if (rec.stop_reason === "live_homepage_only") return null; // an old homepage-only partial run: run the full pipeline instead
+  // A draft the gate or the model rejected is retried on the next run, not served for a week (the model can word it differently).
+  const d = typeof rec.draft === "string" ? JSON.parse(rec.draft) : rec.draft;
+  if (d && ["failed", "failed_provenance"].includes(d.status)) return null;
   // No draft only because Hunter was unavailable (no key yet, the web slice used up, a hiccup) is temporary: run again later.
   const flags = Array.isArray(rec.flags) ? rec.flags : JSON.parse(rec.flags ?? "[]");
   if (flags.some((f) => f === "hunter_key_missing" || f === "hunter_web_cap_reached" || f.startsWith("hunter_transient") || f === "time_limit:contact")) return null;
