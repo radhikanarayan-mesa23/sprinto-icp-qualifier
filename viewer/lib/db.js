@@ -12,7 +12,7 @@ function client() {
 export async function listCompanies() {
   const sql = client();
   return sql`
-    SELECT domain, decision, rank, rank_basis, run_source, fetched_at, queue, failure_reason, flags, contact,
+    SELECT domain, decision, rank, rank_basis, run_source, fetched_at, queue, failure_reason, flags, contact, pages_fetched,
            draft->>'status' AS draft_status,
            extracted_fields->'company_name'->>'value' AS name,
            model_calls, elapsed_seconds

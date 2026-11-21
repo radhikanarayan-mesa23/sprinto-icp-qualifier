@@ -7,6 +7,25 @@ export const metadata = { title: "Review queue" };
 
 const DRAFT = { drafted: "Ready to review", blocked: "Not drafted", failed_provenance: "Failed the provenance gate", failed: "Draft failed" };
 
+// Which pages this company's evidence came from, in the order they were read. A page that did not load (404, blocked, off-domain) is
+// shown struck through, because it was tried and counted but contributed nothing. "reader" means a JS-built page read via the renderer.
+function Pages({ pages }) {
+  const list = Array.isArray(pages) ? pages : [];
+  if (!list.length) return <Dash />;
+  return (
+    <ul className="pagelist">
+      {list.map((p, i) => {
+        const ok = !p.failure_reason && p.status >= 200 && p.status < 400;
+        return (
+          <li key={`${p.path}-${i}`} className={ok ? "ok" : "bad"} title={ok ? `${p.url} (HTTP ${p.status}${p.method === "reader" ? ", read via renderer" : ""})` : `${p.url ?? p.path}: ${p.failure_reason ?? `HTTP ${p.status}`}`}>
+            <code>{p.path}</code>{ok && p.method === "reader" ? <span className="tag">rendered</span> : null}{!ok ? <span className="tag">{p.failure_reason ?? p.status}</span> : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function bucket(r) {
   if (r.decision === "no_go") return "out";
   return r.draft_status === "drafted" ? "ready" : "human";
@@ -68,6 +87,7 @@ export default async function Page({ searchParams }) {
                 <th scope="col" className="r">Rank</th>
                 <th scope="col">Contact</th>
                 <th scope="col">Draft</th>
+                <th scope="col">Pages scraped</th>
                 <th scope="col" className="r">Flags</th>
                 <th scope="col" className="r">Fetched</th>
               </tr>
@@ -87,6 +107,7 @@ export default async function Page({ searchParams }) {
                       {c ? <>{c.first_name} {c.last_name}<span className="second">{c.title}</span></> : <Dash />}
                     </td>
                     <td className="c-draft">{DRAFT[r.draft_status] ?? <Dash />}</td>
+                    <td className="c-pages"><Pages pages={r.pages_fetched} /></td>
                     <td className="c-flags r">{r.flags?.length ?? 0}</td>
                     <td className="c-date r nowrap">{fmtDate(r.fetched_at)}</td>
                   </tr>
